@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import { createClient } from '@supabase/supabase-js';
 
-// Configuración de Supabase Unificada
 const SUPABASE_URL = 'https://ctgrfytplwtilorayuyn.supabase.co'; 
 const SUPABASE_ANON_KEY = 'sb_publishable_KKxMEZ7U0KAYV-Za8lU8gw_qgLcc79M';
 
@@ -60,26 +59,21 @@ export default function App() {
 
   // Oración
   const [prayers, setPrayers] = useState([
-    { id: '1', name: 'Hermana María G.', request: 'Oración por la salud de la familia y pronta recuperación.' },
-    { id: '2', name: 'Hermano Carlos R.', request: 'Acción de gracias y bendición para un proyecto de trabajo.' },
+    { id: '1', name: 'Hermana María G.', request: 'Oración por la salud de la familia y pronta recuperación.', status: 'active', count: 5 },
+    { id: '2', name: 'Hermano Carlos R.', request: 'Acción de gracias y bendición para un proyecto de trabajo.', status: 'answered', count: 12 },
   ]);
-  const [newPrayer, setNewPrayer] = useState('');
+  const [newPrayerName, setNewPrayerName] = useState('');
+  const [newPrayerRequest, setNewPrayerRequest] = useState('');
 
   // Comités
-  const [comitesList, setComitesList] = useState([
-    { id: '1', nombre: 'Comité de Jóvenes', descripcion: 'Coordinación de actividades juveniles y eventos especiales' },
-    { id: '2', nombre: 'Comité de Misiones', descripcion: 'Apoyo y planificación de obra misionera' }
-  ]);
+  const [comitesList, setComitesList] = useState([]);
   const [showComiteForm, setShowComiteForm] = useState(false);
   const [editingComiteId, setEditingComiteId] = useState(null);
   const [newComiteName, setNewComiteName] = useState('');
   const [newComiteDesc, setNewComiteDesc] = useState('');
 
   // Tesorería
-  const [financeList, setFinanceList] = useState([
-    { id: '1', label: 'Diezmos Registrados', amount: '$ 0.00', color: '#00ffcc' },
-    { id: '2', label: 'Fondos de Pro-Templo', amount: '$ 0.00', color: '#00e5ff' }
-  ]);
+  const [financeList, setFinanceList] = useState([]);
   const [showFinanceForm, setShowFinanceForm] = useState(false);
   const [editingFinanceId, setEditingFinanceId] = useState(null);
   const [newFinanceLabel, setNewFinanceLabel] = useState('');
@@ -87,24 +81,30 @@ export default function App() {
 
   // Calendario
   const [selectedDay, setSelectedDay] = useState('2026-11-05');
-  const [eventsList, setEventsList] = useState([
-    { id: '1', date: '2026-11-05', title: 'Culto de Adoración y Jóvenes', time: '7:00 PM', details: 'Predica el Pastor invitado y alabanza especial.' },
-    { id: '2', date: '2026-12-15', title: 'Culto Navideño Especial', time: '6:30 PM', details: 'Programa especial de fin de año con toda la congregación.' }
-  ]);
+  const [eventsList, setEventsList] = useState([]);
   const [showEventForm, setShowEventForm] = useState(false);
   const [newEventTitle, setNewEventTitle] = useState('');
   const [newEventTime, setNewEventTime] = useState('');
   const [newEventDetails, setNewEventDetails] = useState('');
 
-  // Sincronización robusta con Supabase
+  // Sincronización con Supabase
   const fetchData = async () => {
     setRefreshing(true);
     try {
-      const { data: sedesData, error } = await supabase.from('sedes').select('*');
-      if (!error && sedesData && sedesData.length > 0) {
-        const formattedSedes = sedesData.map(s => ({ ...s, id: String(s.id) }));
-        setSedesList(formattedSedes);
-        setSelectedSede(prev => formattedSedes.find(s => s.id === String(prev?.id)) || formattedSedes[0]);
+      const { data: sedesData } = await supabase.from('sedes').select('*');
+      if (sedesData && sedesData.length > 0) {
+        const formatted = sedesData.map(s => ({ ...s, id: String(s.id) }));
+        setSedesList(formatted);
+        setSelectedSede(prev => formatted.find(s => s.id === String(prev?.id)) || formatted[0]);
+      }
+
+      const { data: prayersData } = await supabase.from('prayers').select('*').order('id', { ascending: false });
+      if (prayersData && prayersData.length > 0) {
+        setPrayers(prayersData.map(p => ({
+          ...p,
+          status: p.status || 'active',
+          count: p.count || 0
+        })));
       }
 
       const { data: comitesData } = await supabase.from('comites').select('*');
@@ -116,8 +116,6 @@ export default function App() {
       const { data: eventsData } = await supabase.from('events').select('*');
       if (eventsData && eventsData.length > 0) setEventsList(eventsData);
 
-      const { data: prayersData } = await supabase.from('prayers').select('*');
-      if (prayersData && prayersData.length > 0) setPrayers(prayersData);
     } catch (err) {
       console.log('Error de sincronización:', err);
     }
@@ -128,7 +126,7 @@ export default function App() {
     fetchData();
   }, []);
 
-  // Lógica lógica y directa de guardado mediante UPSERT
+  // Lógica de Sedes
   const handleSaveSede = async () => {
     const finalName = newSedeName.trim() || 'Nueva Sede';
     let finalUrl = newSedeChannelUrl.trim();
@@ -142,32 +140,14 @@ export default function App() {
     }
 
     const targetId = editingId ? String(editingId) : String(Date.now());
-    
-    const payload = {
-      id: targetId,
-      nombre: finalName,
-      url: finalUrl,
-      isLive: newSedeIsLive
-    };
+    const payload = { id: targetId, nombre: finalName, url: finalUrl, isLive: newSedeIsLive };
 
-    // Actualización inmediata en UI para evitar latencia visual
-    if (editingId) {
-      setSedesList(prev => prev.map(s => s.id === targetId ? payload : s));
-      setSelectedSede(payload);
-    } else {
-      setSedesList(prev => [...prev, payload]);
-      setSelectedSede(payload);
-    }
+    setSedesList(prev => editingId ? prev.map(s => s.id === targetId ? payload : s) : [...prev, payload]);
+    setSelectedSede(payload);
 
-    // Persistencia infalible con upsert en Supabase
     const { error } = await supabase.from('sedes').upsert([payload]);
-    if (error) {
-      console.error('Error crítico al guardar en Supabase:', error.message);
-      alert('Error al guardar en la base de datos: ' + error.message);
-    } else {
-      // Recargar datos oficiales del servidor tras confirmar éxito
-      fetchData();
-    }
+    if (error) alert('Error en BD: ' + error.message);
+    else fetchData();
 
     setNewSedeName('');
     setNewSedeChannelUrl('');
@@ -184,31 +164,50 @@ export default function App() {
     await supabase.from('sedes').delete().eq('id', targetId);
   };
 
+  // --- LÓGICA MEJORADA DE ORACIÓN ---
   const addPrayer = async () => {
-    if (newPrayer.trim() === '') return;
-    const newObj = { id: String(Date.now()), name: 'Tú', request: newPrayer.trim() };
+    if (newPrayerRequest.trim() === '') return;
+    const newObj = { 
+      id: String(Date.now()), 
+      name: newPrayerName.trim() || 'Anónimo', 
+      request: newPrayerRequest.trim(),
+      status: 'active',
+      count: 1
+    };
+
     setPrayers(prev => [newObj, ...prev]);
     await supabase.from('prayers').insert([newObj]);
-    setNewPrayer('');
+    setNewPrayerName('');
+    setNewPrayerRequest('');
   };
 
+  const handleSupportPrayer = async (item) => {
+    const updatedCount = (item.count || 0) + 1;
+    setPrayers(prev => prev.map(p => p.id === item.id ? { ...p, count: updatedCount } : p));
+    await supabase.from('prayers').update({ count: updatedCount }).eq('id', item.id);
+  };
+
+  const togglePrayerStatus = async (item) => {
+    const newStatus = item.status === 'answered' ? 'active' : 'answered';
+    setPrayers(prev => prev.map(p => p.id === item.id ? { ...p, status: newStatus } : p));
+    await supabase.from('prayers').update({ status: newStatus }).eq('id', item.id);
+  };
+
+  const handleDeletePrayer = async (id) => {
+    setPrayers(prev => prev.filter(p => p.id !== String(id)));
+    await supabase.from('prayers').delete().eq('id', String(id));
+  };
+
+  // Lógica Comités
   const handleSaveComite = async () => {
     const payload = {
       id: editingComiteId ? String(editingComiteId) : String(Date.now()),
       nombre: newComiteName.trim() || 'Comité',
       descripcion: newComiteDesc.trim()
     };
-    if (editingComiteId) {
-      setComitesList(prev => prev.map(c => c.id === payload.id ? payload : c));
-      await supabase.from('comites').upsert([payload]);
-    } else {
-      setComitesList(prev => [...prev, payload]);
-      await supabase.from('comites').insert([payload]);
-    }
-    setNewComiteName('');
-    setNewComiteDesc('');
-    setEditingComiteId(null);
-    setShowComiteForm(false);
+    setComitesList(prev => editingComiteId ? prev.map(c => c.id === payload.id ? payload : c) : [...prev, payload]);
+    await supabase.from('comites').upsert([payload]);
+    setNewComiteName(''); setNewComiteDesc(''); setEditingComiteId(null); setShowComiteForm(false);
   };
 
   const handleDeleteComite = async (id) => {
@@ -216,6 +215,7 @@ export default function App() {
     await supabase.from('comites').delete().eq('id', String(id));
   };
 
+  // Lógica Tesorería
   const handleSaveFinance = async () => {
     const payload = {
       id: editingFinanceId ? String(editingFinanceId) : String(Date.now()),
@@ -223,17 +223,9 @@ export default function App() {
       amount: newFinanceAmount.trim() || '$ 0.00',
       color: '#00ffcc'
     };
-    if (editingFinanceId) {
-      setFinanceList(prev => prev.map(f => f.id === payload.id ? payload : f));
-      await supabase.from('finance').upsert([payload]);
-    } else {
-      setFinanceList(prev => [...prev, payload]);
-      await supabase.from('finance').insert([payload]);
-    }
-    setNewFinanceLabel('');
-    setNewFinanceAmount('');
-    setEditingFinanceId(null);
-    setShowFinanceForm(false);
+    setFinanceList(prev => editingFinanceId ? prev.map(f => f.id === payload.id ? payload : f) : [...prev, payload]);
+    await supabase.from('finance').upsert([payload]);
+    setNewFinanceLabel(''); setNewFinanceAmount(''); setEditingFinanceId(null); setShowFinanceForm(false);
   };
 
   const handleDeleteFinance = async (id) => {
@@ -242,6 +234,7 @@ export default function App() {
     await supabase.from('finance').delete().eq('id', String(id));
   };
 
+  // Lógica Eventos
   const handleSaveEvent = async () => {
     if (!newEventTitle.trim()) return;
     const payload = {
@@ -253,10 +246,7 @@ export default function App() {
     };
     setEventsList(prev => [...prev, payload]);
     await supabase.from('events').insert([payload]);
-    setNewEventTitle('');
-    setNewEventTime('');
-    setNewEventDetails('');
-    setShowEventForm(false);
+    setNewEventTitle(''); setNewEventTime(''); setNewEventDetails(''); setShowEventForm(false);
   };
 
   const handleDeleteEvent = async (id) => {
@@ -315,6 +305,8 @@ export default function App() {
 
       <View style={[styles.mainWrapper, isDesktop && styles.desktopWrapper]}>
         <View style={{ flex: 1, width: '100%' }}>
+          
+          {/* MÓDULO DE TRANSMISIÓN */}
           {activeTab === 'live' && (
             <ScrollView style={styles.content}>
               <View style={styles.sedesHeaderRow}>
@@ -405,24 +397,68 @@ export default function App() {
             </ScrollView>
           )}
 
+          {/* MÓDULO DE PETICIONES DE ORACIÓN REVOLUCIONADO */}
           {activeTab === 'prayers' && (
             <ScrollView style={styles.content}>
-              <Text style={styles.sectionTitle}>Peticiones de Oración</Text>
-              <View style={styles.formGroup}>
-                <TextInput style={styles.input} placeholder="Escribe tu petición..." placeholderTextColor="#666" value={newPrayer} onChangeText={setNewPrayer} />
+              <Text style={styles.sectionTitle}>🙏 Red de Oración Congregacional</Text>
+              
+              <View style={styles.addSedeCard}>
+                <TextInput 
+                  style={styles.input} 
+                  placeholder="Tu Nombre (Opcional)" 
+                  placeholderTextColor="#666" 
+                  value={newPrayerName} 
+                  onChangeText={setNewPrayerName} 
+                />
+                <TextInput 
+                  style={[styles.input, { height: 80 }]} 
+                  placeholder="Escribe tu motivo de oración o agradecimiento..." 
+                  placeholderTextColor="#666" 
+                  multiline 
+                  value={newPrayerRequest} 
+                  onChangeText={setNewPrayerRequest} 
+                />
                 <TouchableOpacity style={styles.actionBtn} onPress={addPrayer}>
                   <Text style={styles.actionBtnText}>Publicar Petición</Text>
                 </TouchableOpacity>
               </View>
+
               {prayers.map(p => (
-                <View key={p.id} style={styles.card}>
-                  <Text style={styles.cardTitle}>{p.name}</Text>
+                <View key={p.id} style={[styles.card, p.status === 'answered' && styles.answeredCard]}>
+                  <View style={styles.cardHeaderRow}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Text style={styles.cardTitle}>{p.name}</Text>
+                      {p.status === 'answered' ? (
+                        <View style={styles.answeredBadge}><Text style={styles.answeredBadgeText}>✨ RESPONDIDA</Text></View>
+                      ) : (
+                        <View style={styles.activePrayerBadge}><Text style={styles.activePrayerBadgeText}>🟡 EN ORACIÓN</Text></View>
+                      )}
+                    </View>
+                    <TouchableOpacity onPress={() => handleDeletePrayer(p.id)}>
+                      <Text style={{ color: '#ff0055', fontWeight: 'bold' }}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+
                   <Text style={styles.cardSub}>{p.request}</Text>
+
+                  {/* Acciones de la Oración */}
+                  <View style={styles.prayerActionRow}>
+                    <TouchableOpacity style={styles.supportBtn} onPress={() => handleSupportPrayer(p)}>
+                      <Text style={styles.supportBtnText}>🙏 Me uno en oración ({p.count || 0})</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.statusToggleBtn} onPress={() => togglePrayerStatus(p)}>
+                      <Text style={styles.statusToggleText}>
+                        {p.status === 'answered' ? '🔄 Marcar en Oración' : '✅ Marcar Respondida'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               ))}
             </ScrollView>
           )}
 
+          {/* MÓDULO DE COMITÉS */}
           {activeTab === 'comites' && (
             <ScrollView style={styles.content}>
               <Text style={styles.sectionTitle}>Comités de Trabajo</Text>
@@ -452,6 +488,7 @@ export default function App() {
             </ScrollView>
           )}
 
+          {/* MÓDULO DE TESORERÍA */}
           {activeTab === 'finance' && (
             <ScrollView style={styles.content}>
               <Text style={styles.centeredSectionTitle}>Diezmos - Ofrendas y Donaciones</Text>
@@ -485,6 +522,7 @@ export default function App() {
             </ScrollView>
           )}
 
+          {/* MÓDULO DE CULTOS */}
           {activeTab === 'services' && (
             <ScrollView style={styles.content}>
               <Text style={styles.sectionTitle}>📅 Calendario de Cultos</Text>
@@ -584,7 +622,7 @@ const styles = StyleSheet.create({
   deleteBtn: { backgroundColor: '#ff0055', width: 18, height: 18, borderRadius: 9, justifyContent: 'center', alignItems: 'center', marginLeft: -6, marginTop: -10, zIndex: 2 },
   deleteBtnText: { color: '#ffffff', fontSize: 10, fontWeight: 'bold' },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#ffffff' },
+  sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#ffffff', marginBottom: 10 },
   centeredSectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#ffffff', textAlign: 'center', marginBottom: 12 },
   liveBadge: { backgroundColor: '#3f0d12', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: '#ff0055' },
   liveBadgeText: { color: '#ff3366', fontSize: 11, fontWeight: 'bold' },
@@ -600,23 +638,34 @@ const styles = StyleSheet.create({
   addSedeToggleText: { color: '#00ffcc', fontWeight: 'bold', fontSize: 13 },
   addSedeCard: { backgroundColor: '#111827', padding: 16, borderRadius: 14, marginBottom: 12, borderWidth: 2, borderColor: '#00ffcc' },
   card: { backgroundColor: '#111827', padding: 16, borderRadius: 14, marginBottom: 10, borderWidth: 1, borderColor: '#1f2937' },
+  answeredCard: { borderColor: '#00ffcc', backgroundColor: '#0b1f1a' },
   cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  cardTitle: { fontSize: 15, fontWeight: 'bold', color: '#ffffff', marginBottom: 4 },
-  cardSub: { fontSize: 13, color: '#9ca3af', marginTop: 2 },
-  formGroup: { marginBottom: 16 },
+  cardTitle: { fontSize: 15, fontWeight: 'bold', color: '#ffffff', marginRight: 8 },
+  cardSub: { fontSize: 13, color: '#d1d5db', marginTop: 4, lineHeight: 18 },
   input: { backgroundColor: '#1f2937', padding: 12, borderRadius: 10, borderWidth: 1.5, borderColor: '#374151', marginBottom: 8, color: '#ffffff', fontSize: 14 },
-  actionBtn: { backgroundColor: '#00ffcc', padding: 14, borderRadius: 12, alignItems: 'center' },
+  actionBtn: { backgroundColor: '#00ffcc', padding: 14, borderRadius: 12, alignItems: 'center', marginTop: 4 },
   actionBtnText: { color: '#0b0f19', fontWeight: 'bold', fontSize: 14 },
   metricContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 10 },
   metricCard: { width: '48%', backgroundColor: '#111827', padding: 14, borderRadius: 14, borderWidth: 1.5, borderColor: '#1f2937', marginBottom: 10 },
   metricLabel: { fontSize: 12, color: '#9ca3af', fontWeight: '600' },
   metricValue: { fontSize: 18, fontWeight: 'bold', marginTop: 4 },
-  daysScroll: { flexDirection: 'row', marginVersion: 8 },
+  daysScroll: { flexDirection: 'row', marginVertical: 8 },
   dayBox: { width: 44, height: 48, backgroundColor: '#111827', justifyContent: 'center', alignItems: 'center', borderRadius: 10, borderWidth: 1.5, borderColor: '#1f2937', marginRight: 6 },
   selectedDayBox: { backgroundColor: '#00ffcc', borderColor: '#00ffcc' },
   dayText: { fontSize: 14, fontWeight: 'bold', color: '#d1d5db' },
   selectedDayText: { color: '#0b0f19' },
   selectedDayHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, marginBottom: 10 },
   smallAddBtn: { backgroundColor: '#1f2937', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#374151' },
-  smallAddText: { color: '#00ffcc', fontWeight: 'bold', fontSize: 12 }
+  smallAddText: { color: '#00ffcc', fontWeight: 'bold', fontSize: 12 },
+  
+  // Estilos de Oración
+  activePrayerBadge: { backgroundColor: '#374151', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
+  activePrayerBadgeText: { color: '#fbbf24', fontSize: 10, fontWeight: 'bold' },
+  answeredBadge: { backgroundColor: '#064e3b', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
+  answeredBadgeText: { color: '#34d399', fontSize: 10, fontWeight: 'bold' },
+  prayerActionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, pt: 8, borderTopWidth: 1, borderColor: '#1f2937' },
+  supportBtn: { backgroundColor: '#1f2937', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#374151' },
+  supportBtnText: { color: '#00ffcc', fontSize: 12, fontWeight: 'bold' },
+  statusToggleBtn: { paddingHorizontal: 8, paddingVertical: 6 },
+  statusToggleText: { color: '#9ca3af', fontSize: 12, fontWeight: '600' }
 });
