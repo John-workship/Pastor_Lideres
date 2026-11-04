@@ -25,6 +25,7 @@ if (Platform.OS !== 'web') {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('live');
+  const [refreshing, setRefreshing] = useState(false);
   
   // Sedes
   const [sedesList, setSedesList] = useState([
@@ -35,12 +36,6 @@ export default function App() {
   const [editingId, setEditingId] = useState(null);
   const [newSedeName, setNewSedeName] = useState('');
   const [newSedeChannelUrl, setNewSedeChannelUrl] = useState('');
-
-  const [pastServices, setPastServices] = useState([
-    { id: '1', title: 'Escuela Dominical', speaker: 'IPUC Mosquera Tercera', duration: 'Grabación' },
-    { id: '2', title: 'Culto de Adoración', speaker: 'Equipo Ministerial', duration: 'Grabado' }
-  ]);
-  const [loadingMedia, setLoadingMedia] = useState(false);
 
   // Oración
   const [prayers, setPrayers] = useState([
@@ -80,31 +75,34 @@ export default function App() {
   const [newEventTime, setNewEventTime] = useState('');
   const [newEventDetails, setNewEventDetails] = useState('');
 
-  // Sincronizar datos con Supabase al iniciar
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const { data: sedesData } = await supabase.from('sedes').select('*');
-        if (sedesData && sedesData.length > 0) {
-          setSedesList(sedesData);
-          setSelectedSede(sedesData[0]);
-        }
-
-        const { data: comitesData } = await supabase.from('comites').select('*');
-        if (comitesData && comitesData.length > 0) setComitesList(comitesData);
-
-        const { data: financeData } = await supabase.from('finance').select('*');
-        if (financeData && financeData.length > 0) setFinanceList(financeData);
-
-        const { data: eventsData } = await supabase.from('events').select('*');
-        if (eventsData && eventsData.length > 0) setEventsList(eventsData);
-
-        const { data: prayersData } = await supabase.from('prayers').select('*');
-        if (prayersData && prayersData.length > 0) setPrayers(prayersData);
-      } catch (err) {
-        console.log('Error sincronizando con Supabase:', err);
+  // Función para sincronizar / refrescar datos desde Supabase
+  const fetchData = async () => {
+    setRefreshing(true);
+    try {
+      const { data: sedesData } = await supabase.from('sedes').select('*');
+      if (sedesData && sedesData.length > 0) {
+        setSedesList(sedesData);
+        setSelectedSede(prev => sedesData.find(s => s.id === prev?.id) || sedesData[0]);
       }
+
+      const { data: comitesData } = await supabase.from('comites').select('*');
+      if (comitesData && comitesData.length > 0) setComitesList(comitesData);
+
+      const { data: financeData } = await supabase.from('finance').select('*');
+      if (financeData && financeData.length > 0) setFinanceList(financeData);
+
+      const { data: eventsData } = await supabase.from('events').select('*');
+      if (eventsData && eventsData.length > 0) setEventsList(eventsData);
+
+      const { data: prayersData } = await supabase.from('prayers').select('*');
+      if (prayersData && prayersData.length > 0) setPrayers(prayersData);
+    } catch (err) {
+      console.log('Error sincronizando con Supabase:', err);
     }
+    setRefreshing(false);
+  };
+
+  useEffect(() => {
     fetchData();
   }, []);
 
@@ -254,23 +252,31 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabContainer}>
-        <TouchableOpacity style={[styles.tabButton, activeTab === 'live' && styles.activeTab]} onPress={() => setActiveTab('live')}>
-          <Text style={[styles.tabText, activeTab === 'live' && styles.activeTabText]}>📺 Transmisión</Text>
+      {/* Barra Superior con Menú y Botón de Actualizar */}
+      <View style={styles.topBarContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabContainer}>
+          <TouchableOpacity style={[styles.tabButton, activeTab === 'live' && styles.activeTab]} onPress={() => setActiveTab('live')}>
+            <Text style={[styles.tabText, activeTab === 'live' && styles.activeTabText]}>📺 Transmisión</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.tabButton, activeTab === 'prayers' && styles.activeTab]} onPress={() => setActiveTab('prayers')}>
+            <Text style={[styles.tabText, activeTab === 'prayers' && styles.activeTabText]}>🙏 Oración</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.tabButton, activeTab === 'comites' && styles.activeTab]} onPress={() => setActiveTab('comites')}>
+            <Text style={[styles.tabText, activeTab === 'comites' && styles.activeTabText]}>👥 Comités</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.tabButton, activeTab === 'finance' && styles.activeTab]} onPress={() => setActiveTab('finance')}>
+            <Text style={[styles.tabText, activeTab === 'finance' && styles.activeTabText]}>💰 Tesorería</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.tabButton, activeTab === 'services' && styles.activeTab]} onPress={() => setActiveTab('services')}>
+            <Text style={[styles.tabText, activeTab === 'services' && styles.activeTabText]}>📋 Cultos</Text>
+          </TouchableOpacity>
+        </ScrollView>
+
+        {/* Botón de Refrescar Datos */}
+        <TouchableOpacity style={styles.refreshBtn} onPress={fetchData} disabled={refreshing}>
+          <Text style={styles.refreshBtnText}>{refreshing ? '⏳...' : '🔄 Actualizar'}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.tabButton, activeTab === 'prayers' && styles.activeTab]} onPress={() => setActiveTab('prayers')}>
-          <Text style={[styles.tabText, activeTab === 'prayers' && styles.activeTabText]}>🙏 Oración</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.tabButton, activeTab === 'comites' && styles.activeTab]} onPress={() => setActiveTab('comites')}>
-          <Text style={[styles.tabText, activeTab === 'comites' && styles.activeTabText]}>👥 Comités</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.tabButton, activeTab === 'finance' && styles.activeTab]} onPress={() => setActiveTab('finance')}>
-          <Text style={[styles.tabText, activeTab === 'finance' && styles.activeTabText]}>💰 Tesorería</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.tabButton, activeTab === 'services' && styles.activeTab]} onPress={() => setActiveTab('services')}>
-          <Text style={[styles.tabText, activeTab === 'services' && styles.activeTabText]}>📋 Cultos</Text>
-        </TouchableOpacity>
-      </ScrollView>
+      </View>
 
       <View style={{ flex: 1 }}>
         {activeTab === 'live' && (
@@ -427,7 +433,7 @@ export default function App() {
               ))}
             </ScrollView>
             
-            <div style={{ marginTop: 12 }}>
+            <View style={{ marginTop: 12 }}>
               <Text style={styles.cardSub}>Diciembre 2026</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.daysScroll}>
                 {decDays.map((dayStr) => (
@@ -436,7 +442,7 @@ export default function App() {
                   </TouchableOpacity>
                 ))}
               </ScrollView>
-            </div>
+            </View>
 
             <View style={styles.selectedDayHeader}>
               <Text style={styles.sectionTitle}>Eventos del {selectedDay}</Text>
@@ -482,11 +488,14 @@ export default function App() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0b0f19' },
-  tabContainer: { flexDirection: 'row', backgroundColor: '#111827', maxHeight: 55, borderBottomWidth: 1, borderColor: '#1f2937' },
+  topBarContainer: { flexDirection: 'row', backgroundColor: '#111827', alignItems: 'center', borderBottomWidth: 1, borderColor: '#1f2937' },
+  tabContainer: { flex: 1, flexDirection: 'row', maxHeight: 55 },
   tabButton: { paddingHorizontal: 16, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
   activeTab: { borderBottomWidth: 3, borderBottomColor: '#00ffcc' },
   tabText: { fontSize: 14, color: '#9ca3af', fontWeight: '600' },
   activeTabText: { color: '#00ffcc', fontWeight: 'bold' },
+  refreshBtn: { backgroundColor: '#1f2937', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, marginRight: 10, borderWidth: 1, borderColor: '#374151' },
+  refreshBtnText: { color: '#00ffcc', fontSize: 12, fontWeight: 'bold' },
   content: { flex: 1, padding: 16 },
   sedesHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
   labelHeader: { fontSize: 12, fontWeight: 'bold', color: '#9ca3af' },
