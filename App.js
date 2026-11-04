@@ -80,7 +80,7 @@ export default function App() {
   const [newEventTime, setNewEventTime] = useState('');
   const [newEventDetails, setNewEventDetails] = useState('');
 
-  // Sincronizar datos con Supabase al iniciar o cambiar de pestaña
+  // Sincronizar datos con Supabase al iniciar
   useEffect(() => {
     async function fetchData() {
       try {
@@ -98,6 +98,9 @@ export default function App() {
 
         const { data: eventsData } = await supabase.from('events').select('*');
         if (eventsData && eventsData.length > 0) setEventsList(eventsData);
+
+        const { data: prayersData } = await supabase.from('prayers').select('*');
+        if (prayersData && prayersData.length > 0) setPrayers(prayersData);
       } catch (err) {
         console.log('Error sincronizando con Supabase:', err);
       }
@@ -145,6 +148,20 @@ export default function App() {
     setSedesList(updated);
     if (selectedSede?.id === idToDelete) setSelectedSede(updated[0]);
     await supabase.from('sedes').delete().eq('id', idToDelete);
+  };
+
+  // Guardar Oración
+  const addPrayer = async () => {
+    if (newPrayer.trim() === '') return;
+    const newPrayerObj = {
+      id: Date.now().toString(),
+      name: 'Tú',
+      request: newPrayer.trim()
+    };
+    
+    setPrayers([newPrayerObj, ...prayers]);
+    await supabase.from('prayers').insert([newPrayerObj]);
+    setNewPrayer('');
   };
 
   // Guardar Comité
@@ -230,12 +247,6 @@ export default function App() {
   const handleDeleteEvent = async (idToDelete) => {
     setEventsList(eventsList.filter(e => e.id !== idToDelete));
     await supabase.from('events').delete().eq('id', idToDelete);
-  };
-
-  const addPrayer = () => {
-    if (newPrayer.trim() === '') return;
-    setPrayers([{ id: Date.now().toString(), name: 'Tú', request: newPrayer }, ...prayers]);
-    setNewPrayer('');
   };
 
   const novDays = Array.from({ length: 30 }, (_, i) => `2026-11-${String(i + 1).padStart(2, '0')}`);
@@ -416,6 +427,17 @@ export default function App() {
               ))}
             </ScrollView>
             
+            <div style={{ marginTop: 12 }}>
+              <Text style={styles.cardSub}>Diciembre 2026</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.daysScroll}>
+                {decDays.map((dayStr) => (
+                  <TouchableOpacity key={dayStr} style={[styles.dayBox, selectedDay === dayStr && styles.selectedDayBox]} onPress={() => setSelectedDay(dayStr)}>
+                    <Text style={[styles.dayText, selectedDay === dayStr && styles.selectedDayText]}>{dayStr.split('-')[2]}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </div>
+
             <View style={styles.selectedDayHeader}>
               <Text style={styles.sectionTitle}>Eventos del {selectedDay}</Text>
               <TouchableOpacity style={styles.smallAddBtn} onPress={() => setShowEventForm(!showEventForm)}>
