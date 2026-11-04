@@ -279,25 +279,26 @@ export default function App() {
       {/* Header Superior Adaptativo */}
       <View style={styles.topBarContainer}>
         {isDesktop ? (
-          // Vista Horizontal para Escritorio
           <View style={styles.desktopTabRow}>
             {tabsList.map(t => (
               <TouchableOpacity key={t.key} style={[styles.tabButton, activeTab === t.key && styles.activeTab]} onPress={() => setActiveTab(t.key)}>
-                <Text style={[styles.tabText, activeTab === t.key && styles.activeTabText]}>{t.label}</Text>
+                <Text style={[styles.tabText, activeTab === t.key && styles.activeTabText]}>
+                  {t.key === 'live' && selectedSede?.url && selectedSede.url.trim() !== '' ? '📺 Transmisión 🔴' : t.label}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
         ) : (
-          // Selector Desplegable (Dropdown) para Dispositivos Móviles
           <View style={styles.mobileDropdownWrapper}>
             <TouchableOpacity style={styles.dropdownSelector} onPress={() => setShowDropdown(!showDropdown)}>
-              <Text style={styles.dropdownSelectorText}>{activeTabObj?.label || 'Seleccionar Módulo'}</Text>
+              <Text style={styles.dropdownSelectorText}>
+                {activeTab === 'live' && selectedSede?.url && selectedSede.url.trim() !== '' ? '📺 Transmisión 🔴' : (activeTabObj?.label || 'Seleccionar Módulo')}
+              </Text>
               <Text style={styles.dropdownArrow}>{showDropdown ? '▲' : '▼'}</Text>
             </TouchableOpacity>
           </View>
         )}
 
-        {/* Botón de Refrescar Datos */}
         <TouchableOpacity style={styles.refreshBtn} onPress={fetchData} disabled={refreshing}>
           <Text style={styles.refreshBtnText}>{refreshing ? '⏳' : '🔄'}</Text>
         </TouchableOpacity>
@@ -316,7 +317,7 @@ export default function App() {
               }}
             >
               <Text style={[styles.dropdownItemText, activeTab === t.key && styles.activeDropdownItemText]}>
-                {t.label}
+                {t.key === 'live' && selectedSede?.url && selectedSede.url.trim() !== '' ? '📺 Transmisión 🔴' : t.label}
               </Text>
             </TouchableOpacity>
           ))}
@@ -342,7 +343,7 @@ export default function App() {
                   <View key={item.id} style={styles.sedeChipWrapper}>
                     <TouchableOpacity style={[styles.sedeChip, selectedSede?.id === item.id && styles.activeSedeChip]} onPress={() => setSelectedSede(item)}>
                       <Text style={[styles.sedeChipText, selectedSede?.id === item.id && styles.activeSedeChipText]}>
-                        🏛️ {item.nombre}
+                        🏛️ {item.nombre} {item.url && item.url.trim() !== '' ? '🔴' : ''}
                       </Text>
                     </TouchableOpacity>
                     {sedesList.length > 1 && (
@@ -356,6 +357,15 @@ export default function App() {
 
               <View style={styles.headerRow}>
                 <Text style={styles.sectionTitle}>{selectedSede?.nombre || 'Sede'}</Text>
+                {selectedSede?.url && selectedSede.url.trim() !== '' ? (
+                  <View style={styles.liveBadge}>
+                    <Text style={styles.liveBadgeText}>🔴 EN DIRECTO</Text>
+                  </View>
+                ) : (
+                  <View style={styles.offlineBadge}>
+                    <Text style={styles.offlineBadgeText}>⚪ OFFLINE</Text>
+                  </View>
+                )}
               </View>
 
               <View style={[styles.videoContainer, isDesktop && styles.desktopVideoContainer]}>
@@ -569,6 +579,10 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#ffffff' },
   centeredSectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#ffffff', textAlign: 'center', marginBottom: 12 },
+  liveBadge: { backgroundColor: '#3f0d12', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: '#ff0055' },
+  liveBadgeText: { color: '#ff3366', fontSize: 11, fontWeight: 'bold' },
+  offlineBadge: { backgroundColor: '#1f2937', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: '#374151' },
+  offlineBadgeText: { color: '#9ca3af', fontSize: 11, fontWeight: 'bold' },
   videoContainer: { height: 200, borderRadius: 16, overflow: 'hidden', marginBottom: 12, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#1f2937' },
   desktopVideoContainer: { height: 380 },
   emptyVideoBox: { padding: 20, alignItems: 'center', justifyContent: 'center' },
