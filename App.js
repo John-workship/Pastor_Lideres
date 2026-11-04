@@ -106,7 +106,6 @@ export default function App() {
       const { data: sedesData } = await supabase.from('sedes').select('*');
       if (sedesData && sedesData.length > 0) {
         setSedesList(sedesData);
-        // Mantener la sede seleccionada o poner la primera
         setSelectedSede(prev => {
           const match = sedesData.find(s => String(s.id) === String(prev?.id));
           return match || sedesData[0];
@@ -139,6 +138,7 @@ export default function App() {
     const finalName = newSedeName.trim() || 'Nueva Sede';
     let finalUrl = newSedeChannelUrl.trim();
 
+    // Procesamiento seguro de URL de YouTube
     if (finalUrl.includes('watch?v=')) {
       const videoId = finalUrl.split('v=')[1]?.split('&')[0];
       finalUrl = `https://www.youtube.com/embed/${videoId}`;
@@ -146,6 +146,7 @@ export default function App() {
       const videoId = finalUrl.split('youtu.be/')[1]?.split('?')[0];
       finalUrl = `https://www.youtube.com/embed/${videoId}`;
     }
+    // Si es un enlace de canal o ya es embed, se deja intacto
 
     const currentId = editingId || String(Date.now());
     const newSedeObj = {
@@ -170,7 +171,6 @@ export default function App() {
     setEditingId(null);
     setShowAddForm(false);
 
-    // Refrescar para asegurar sincronía exacta con Supabase
     fetchData();
   };
 
