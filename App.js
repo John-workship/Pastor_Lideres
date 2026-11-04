@@ -8,7 +8,8 @@ import {
   ActivityIndicator, 
   SafeAreaView,
   TextInput,
-  Platform 
+  Platform,
+  Dimensions 
 } from 'react-native';
 import { createClient } from '@supabase/supabase-js';
 
@@ -27,6 +28,19 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('live');
   const [refreshing, setRefreshing] = useState(false);
   
+  // Detección dinámica de las dimensiones de la pantalla
+  const [screenData, setScreenData] = useState(Dimensions.get('window'));
+
+  useEffect(() => {
+    const onChange = (result) => {
+      setScreenData(result.window);
+    };
+    const dimensionListener = Dimensions.addEventListener('change', onChange);
+    return () => dimensionListener?.remove();
+  }, []);
+
+  const isDesktop = screenData.width >= 768;
+
   // Sedes
   const [sedesList, setSedesList] = useState([
     { id: '1', nombre: 'IPUC Mosquera Tercera', url: '' }
@@ -75,7 +89,7 @@ export default function App() {
   const [newEventTime, setNewEventTime] = useState('');
   const [newEventDetails, setNewEventDetails] = useState('');
 
-  // Función para sincronizar / refrescar datos desde Supabase
+  // Sincronizar datos con Supabase
   const fetchData = async () => {
     setRefreshing(true);
     try {
@@ -252,7 +266,7 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Barra Superior con Menú y Botón de Actualizar */}
+      {/* Barra Superior con Menú Adaptativo y Botón de Actualizar */}
       <View style={styles.topBarContainer}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabContainer}>
           <TouchableOpacity style={[styles.tabButton, activeTab === 'live' && styles.activeTab]} onPress={() => setActiveTab('live')}>
@@ -272,215 +286,217 @@ export default function App() {
           </TouchableOpacity>
         </ScrollView>
 
-        {/* Botón de Refrescar Datos */}
         <TouchableOpacity style={styles.refreshBtn} onPress={fetchData} disabled={refreshing}>
           <Text style={styles.refreshBtnText}>{refreshing ? '⏳...' : '🔄 Actualizar'}</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={{ flex: 1 }}>
-        {activeTab === 'live' && (
-          <ScrollView style={styles.content}>
-            <View style={styles.sedesHeaderRow}>
-              <Text style={styles.labelHeader}>Sedes Registradas:</Text>
-              {selectedSede && (
-                <TouchableOpacity onPress={() => { setEditingId(selectedSede.id); setNewSedeName(selectedSede.nombre); setNewSedeChannelUrl(selectedSede.url); setShowAddForm(true); }}>
-                  <Text style={styles.editSedeText}>✏️ Modificar Sede Actual</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
-              {sedesList.map((item) => (
-                <View key={item.id} style={styles.sedeChipWrapper}>
-                  <TouchableOpacity style={[styles.sedeChip, selectedSede?.id === item.id && styles.activeSedeChip]} onPress={() => setSelectedSede(item)}>
-                    <Text style={[styles.sedeChipText, selectedSede?.id === item.id && styles.activeSedeChipText]}>
-                      🏛️ {item.nombre}
-                    </Text>
+      {/* Contenedor Principal Adaptativo según Escritorio o Móvil */}
+      <View style={[styles.mainWrapper, isDesktop && styles.desktopWrapper]}>
+        <View style={{ flex: 1, width: '100%' }}>
+          {activeTab === 'live' && (
+            <ScrollView style={styles.content}>
+              <View style={styles.sedesHeaderRow}>
+                <Text style={styles.labelHeader}>Sedes Registradas:</Text>
+                {selectedSede && (
+                  <TouchableOpacity onPress={() => { setEditingId(selectedSede.id); setNewSedeName(selectedSede.nombre); setNewSedeChannelUrl(selectedSede.url); setShowAddForm(true); }}>
+                    <Text style={styles.editSedeText}>✏️ Modificar Sede Actual</Text>
                   </TouchableOpacity>
-                  {sedesList.length > 1 && (
-                    <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDeleteSede(item.id)}>
-                      <Text style={styles.deleteBtnText}>✕</Text>
+                )}
+              </View>
+
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+                {sedesList.map((item) => (
+                  <View key={item.id} style={styles.sedeChipWrapper}>
+                    <TouchableOpacity style={[styles.sedeChip, selectedSede?.id === item.id && styles.activeSedeChip]} onPress={() => setSelectedSede(item)}>
+                      <Text style={[styles.sedeChipText, selectedSede?.id === item.id && styles.activeSedeChipText]}>
+                        🏛️ {item.nombre}
+                      </Text>
                     </TouchableOpacity>
-                  )}
-                </View>
-              ))}
-            </ScrollView>
-
-            <View style={styles.headerRow}>
-              <Text style={styles.sectionTitle}>{selectedSede?.nombre || 'Sede'}</Text>
-            </View>
-
-            <View style={styles.videoContainer}>
-              {selectedSede?.url ? (
-                Platform.OS === 'web' ? (
-                  <iframe width="100%" height="100%" src={selectedSede.url} frameBorder="0" allowFullScreen />
-                ) : (
-                  WebView && <WebView style={{ flex: 1 }} source={{ uri: selectedSede.url }} />
-                )
-              ) : (
-                <View style={styles.emptyVideoBox}>
-                  <Text style={styles.emptyVideoText}>⚠️ No hay URL de transmisión configurada.</Text>
-                </View>
-              )}
-            </View>
-
-            <TouchableOpacity style={styles.addSedeToggleBtn} onPress={() => setShowAddForm(!showAddForm)}>
-              <Text style={styles.addSedeToggleText}>{showAddForm ? '❌ Cancelar' : '➕ Registrar Nueva Sede'}</Text>
-            </TouchableOpacity>
-
-            {showAddForm && (
-              <View style={styles.addSedeCard}>
-                <TextInput style={styles.input} placeholder="Nombre de la Sede" placeholderTextColor="#666" value={newSedeName} onChangeText={setNewSedeName} />
-                <TextInput style={styles.input} placeholder="URL de YouTube" placeholderTextColor="#666" value={newSedeChannelUrl} onChangeText={setNewSedeChannelUrl} />
-                <TouchableOpacity style={styles.actionBtn} onPress={handleSaveSede}>
-                  <Text style={styles.actionBtnText}>Guardar en Base de Datos</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </ScrollView>
-        )}
-
-        {activeTab === 'prayers' && (
-          <ScrollView style={styles.content}>
-            <Text style={styles.sectionTitle}>Peticiones de Oración</Text>
-            <View style={styles.formGroup}>
-              <TextInput style={styles.input} placeholder="Escribe tu petición..." placeholderTextColor="#666" value={newPrayer} onChangeText={setNewPrayer} />
-              <TouchableOpacity style={styles.actionBtn} onPress={addPrayer}>
-                <Text style={styles.actionBtnText}>Publicar Petición</Text>
-              </TouchableOpacity>
-            </View>
-            {prayers.map(p => (
-              <View key={p.id} style={styles.card}>
-                <Text style={styles.cardTitle}>{p.name}</Text>
-                <Text style={styles.cardSub}>{p.request}</Text>
-              </View>
-            ))}
-          </ScrollView>
-        )}
-
-        {activeTab === 'comites' && (
-          <ScrollView style={styles.content}>
-            <Text style={styles.sectionTitle}>Comités de Trabajo</Text>
-            {comitesList.map(comite => (
-              <View key={comite.id} style={styles.card}>
-                <View style={styles.cardHeaderRow}>
-                  <Text style={styles.cardTitle}>{comite.nombre}</Text>
-                  <TouchableOpacity onPress={() => handleDeleteComite(comite.id)}>
-                    <Text style={{ color: '#ff0055', fontWeight: 'bold' }}>✕ Eliminar</Text>
-                  </TouchableOpacity>
-                </View>
-                <Text style={styles.cardSub}>{comite.descripcion}</Text>
-              </View>
-            ))}
-            <TouchableOpacity style={styles.addSedeToggleBtn} onPress={() => setShowComiteForm(!showComiteForm)}>
-              <Text style={styles.addSedeToggleText}>{showComiteForm ? '❌ Cancelar' : '➕ Crear Nuevo Comité'}</Text>
-            </TouchableOpacity>
-            {showComiteForm && (
-              <View style={styles.addSedeCard}>
-                <TextInput style={styles.input} placeholder="Nombre del Comité" placeholderTextColor="#666" value={newComiteName} onChangeText={setNewComiteName} />
-                <TextInput style={styles.input} placeholder="Descripción" placeholderTextColor="#666" value={newComiteDesc} onChangeText={setNewComiteDesc} />
-                <TouchableOpacity style={styles.actionBtn} onPress={handleSaveComite}>
-                  <Text style={styles.actionBtnText}>Guardar Comité</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </ScrollView>
-        )}
-
-        {activeTab === 'finance' && (
-          <ScrollView style={styles.content}>
-            <Text style={styles.centeredSectionTitle}>Diezmos - Ofrendas y Donaciones</Text>
-            <View style={styles.metricContainer}>
-              {financeList.map(item => (
-                <View key={item.id} style={styles.metricCard}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <Text style={styles.metricLabel}>{item.label}</Text>
-                    {financeList.length > 1 && (
-                      <TouchableOpacity onPress={() => handleDeleteFinance(item.id)}>
-                        <Text style={{ color: '#ff0055', fontWeight: 'bold' }}>✕</Text>
+                    {sedesList.length > 1 && (
+                      <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDeleteSede(item.id)}>
+                        <Text style={styles.deleteBtnText}>✕</Text>
                       </TouchableOpacity>
                     )}
                   </View>
-                  <Text style={[styles.metricValue, { color: item.color || '#00ffcc' }]}>{item.amount}</Text>
+                ))}
+              </ScrollView>
+
+              <View style={styles.headerRow}>
+                <Text style={styles.sectionTitle}>{selectedSede?.nombre || 'Sede'}</Text>
+              </View>
+
+              <View style={[styles.videoContainer, isDesktop && styles.desktopVideoContainer]}>
+                {selectedSede?.url ? (
+                  Platform.OS === 'web' ? (
+                    <iframe width="100%" height="100%" src={selectedSede.url} frameBorder="0" allowFullScreen />
+                  ) : (
+                    WebView && <WebView style={{ flex: 1 }} source={{ uri: selectedSede.url }} />
+                  )
+                ) : (
+                  <View style={styles.emptyVideoBox}>
+                    <Text style={styles.emptyVideoText}>⚠️ No hay URL de transmisión configurada.</Text>
+                  </View>
+                )}
+              </View>
+
+              <TouchableOpacity style={styles.addSedeToggleBtn} onPress={() => setShowAddForm(!showAddForm)}>
+                <Text style={styles.addSedeToggleText}>{showAddForm ? '❌ Cancelar' : '➕ Registrar Nueva Sede'}</Text>
+              </TouchableOpacity>
+
+              {showAddForm && (
+                <View style={styles.addSedeCard}>
+                  <TextInput style={styles.input} placeholder="Nombre de la Sede" placeholderTextColor="#666" value={newSedeName} onChangeText={setNewSedeName} />
+                  <TextInput style={styles.input} placeholder="URL de YouTube" placeholderTextColor="#666" value={newSedeChannelUrl} onChangeText={setNewSedeChannelUrl} />
+                  <TouchableOpacity style={styles.actionBtn} onPress={handleSaveSede}>
+                    <Text style={styles.actionBtnText}>Guardar en Base de Datos</Text>
+                  </TouchableOpacity>
                 </View>
-              ))}
-            </View>
-            <TouchableOpacity style={styles.addSedeToggleBtn} onPress={() => setShowFinanceForm(!showFinanceForm)}>
-              <Text style={styles.addSedeToggleText}>{showFinanceForm ? '❌ Cancelar' : '➕ Crear Nuevo Fondo'}</Text>
-            </TouchableOpacity>
-            {showFinanceForm && (
-              <View style={styles.addSedeCard}>
-                <TextInput style={styles.input} placeholder="Nombre del Fondo" placeholderTextColor="#666" value={newFinanceLabel} onChangeText={setNewFinanceLabel} />
-                <TextInput style={styles.input} placeholder="Monto (Ej: $ 150,000)" placeholderTextColor="#666" value={newFinanceAmount} onChangeText={setNewFinanceAmount} />
-                <TouchableOpacity style={styles.actionBtn} onPress={handleSaveFinance}>
-                  <Text style={styles.actionBtnText}>Guardar Fondo</Text>
+              )}
+            </ScrollView>
+          )}
+
+          {activeTab === 'prayers' && (
+            <ScrollView style={styles.content}>
+              <Text style={styles.sectionTitle}>Peticiones de Oración</Text>
+              <View style={styles.formGroup}>
+                <TextInput style={styles.input} placeholder="Escribe tu petición..." placeholderTextColor="#666" value={newPrayer} onChangeText={setNewPrayer} />
+                <TouchableOpacity style={styles.actionBtn} onPress={addPrayer}>
+                  <Text style={styles.actionBtnText}>Publicar Petición</Text>
                 </TouchableOpacity>
               </View>
-            )}
-          </ScrollView>
-        )}
-
-        {activeTab === 'services' && (
-          <ScrollView style={styles.content}>
-            <Text style={styles.sectionTitle}>📅 Calendario de Cultos</Text>
-            <Text style={styles.cardSub}>Noviembre 2026</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.daysScroll}>
-              {novDays.map((dayStr) => (
-                <TouchableOpacity key={dayStr} style={[styles.dayBox, selectedDay === dayStr && styles.selectedDayBox]} onPress={() => setSelectedDay(dayStr)}>
-                  <Text style={[styles.dayText, selectedDay === dayStr && styles.selectedDayText]}>{dayStr.split('-')[2]}</Text>
-                </TouchableOpacity>
+              {prayers.map(p => (
+                <View key={p.id} style={styles.card}>
+                  <Text style={styles.cardTitle}>{p.name}</Text>
+                  <Text style={styles.cardSub}>{p.request}</Text>
+                </View>
               ))}
             </ScrollView>
-            
-            <View style={{ marginTop: 12 }}>
-              <Text style={styles.cardSub}>Diciembre 2026</Text>
+          )}
+
+          {activeTab === 'comites' && (
+            <ScrollView style={styles.content}>
+              <Text style={styles.sectionTitle}>Comités de Trabajo</Text>
+              {comitesList.map(comite => (
+                <View key={comite.id} style={styles.card}>
+                  <View style={styles.cardHeaderRow}>
+                    <Text style={styles.cardTitle}>{comite.nombre}</Text>
+                    <TouchableOpacity onPress={() => handleDeleteComite(comite.id)}>
+                      <Text style={{ color: '#ff0055', fontWeight: 'bold' }}>✕ Eliminar</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={styles.cardSub}>{comite.descripcion}</Text>
+                </View>
+              ))}
+              <TouchableOpacity style={styles.addSedeToggleBtn} onPress={() => setShowComiteForm(!showComiteForm)}>
+                <Text style={styles.addSedeToggleText}>{showComiteForm ? '❌ Cancelar' : '➕ Crear Nuevo Comité'}</Text>
+              </TouchableOpacity>
+              {showComiteForm && (
+                <View style={styles.addSedeCard}>
+                  <TextInput style={styles.input} placeholder="Nombre del Comité" placeholderTextColor="#666" value={newComiteName} onChangeText={setNewComiteName} />
+                  <TextInput style={styles.input} placeholder="Descripción" placeholderTextColor="#666" value={newComiteDesc} onChangeText={setNewComiteDesc} />
+                  <TouchableOpacity style={styles.actionBtn} onPress={handleSaveComite}>
+                    <Text style={styles.actionBtnText}>Guardar Comité</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </ScrollView>
+          )}
+
+          {activeTab === 'finance' && (
+            <ScrollView style={styles.content}>
+              <Text style={styles.centeredSectionTitle}>Diezmos - Ofrendas y Donaciones</Text>
+              <View style={styles.metricContainer}>
+                {financeList.map(item => (
+                  <View key={item.id} style={[styles.metricCard, isDesktop && { width: '32%' }]}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <Text style={styles.metricLabel}>{item.label}</Text>
+                      {financeList.length > 1 && (
+                        <TouchableOpacity onPress={() => handleDeleteFinance(item.id)}>
+                          <Text style={{ color: '#ff0055', fontWeight: 'bold' }}>✕</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                    <Text style={[styles.metricValue, { color: item.color || '#00ffcc' }]}>{item.amount}</Text>
+                  </View>
+                ))}
+              </View>
+              <TouchableOpacity style={styles.addSedeToggleBtn} onPress={() => setShowFinanceForm(!showFinanceForm)}>
+                <Text style={styles.addSedeToggleText}>{showFinanceForm ? '❌ Cancelar' : '➕ Crear Nuevo Fondo'}</Text>
+              </TouchableOpacity>
+              {showFinanceForm && (
+                <View style={styles.addSedeCard}>
+                  <TextInput style={styles.input} placeholder="Nombre del Fondo" placeholderTextColor="#666" value={newFinanceLabel} onChangeText={setNewFinanceLabel} />
+                  <TextInput style={styles.input} placeholder="Monto (Ej: $ 150,000)" placeholderTextColor="#666" value={newFinanceAmount} onChangeText={setNewFinanceAmount} />
+                  <TouchableOpacity style={styles.actionBtn} onPress={handleSaveFinance}>
+                    <Text style={styles.actionBtnText}>Guardar Fondo</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </ScrollView>
+          )}
+
+          {activeTab === 'services' && (
+            <ScrollView style={styles.content}>
+              <Text style={styles.sectionTitle}>📅 Calendario de Cultos</Text>
+              <Text style={styles.cardSub}>Noviembre 2026</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.daysScroll}>
-                {decDays.map((dayStr) => (
+                {novDays.map((dayStr) => (
                   <TouchableOpacity key={dayStr} style={[styles.dayBox, selectedDay === dayStr && styles.selectedDayBox]} onPress={() => setSelectedDay(dayStr)}>
                     <Text style={[styles.dayText, selectedDay === dayStr && styles.selectedDayText]}>{dayStr.split('-')[2]}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
-            </View>
+              
+              <View style={{ marginTop: 12 }}>
+                <Text style={styles.cardSub}>Diciembre 2026</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.daysScroll}>
+                  {decDays.map((dayStr) => (
+                    <TouchableOpacity key={dayStr} style={[styles.dayBox, selectedDay === dayStr && styles.selectedDayBox]} onPress={() => setSelectedDay(dayStr)}>
+                      <Text style={[styles.dayText, selectedDay === dayStr && styles.selectedDayText]}>{dayStr.split('-')[2]}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
 
-            <View style={styles.selectedDayHeader}>
-              <Text style={styles.sectionTitle}>Eventos del {selectedDay}</Text>
-              <TouchableOpacity style={styles.smallAddBtn} onPress={() => setShowEventForm(!showEventForm)}>
-                <Text style={styles.smallAddText}>{showEventForm ? '✕ Cancelar' : '➕ Agregar'}</Text>
-              </TouchableOpacity>
-            </View>
-
-            {showEventForm && (
-              <View style={styles.addSedeCard}>
-                <TextInput style={styles.input} placeholder="Título del Evento" placeholderTextColor="#666" value={newEventTitle} onChangeText={setNewEventTitle} />
-                <TextInput style={styles.input} placeholder="Hora (Ej: 7:00 PM)" placeholderTextColor="#666" value={newEventTime} onChangeText={setNewEventTime} />
-                <TextInput style={styles.input} placeholder="Detalles" placeholderTextColor="#666" value={newEventDetails} onChangeText={setNewEventDetails} />
-                <TouchableOpacity style={styles.actionBtn} onPress={handleSaveEvent}>
-                  <Text style={styles.actionBtnText}>Guardar Evento</Text>
+              <View style={styles.selectedDayHeader}>
+                <Text style={styles.sectionTitle}>Eventos del {selectedDay}</Text>
+                <TouchableOpacity style={styles.smallAddBtn} onPress={() => setShowEventForm(!showEventForm)}>
+                  <Text style={styles.smallAddText}>{showEventForm ? '✕ Cancelar' : '➕ Agregar'}</Text>
                 </TouchableOpacity>
               </View>
-            )}
 
-            {eventsList.filter(e => e.date === selectedDay).length > 0 ? (
-              eventsList.filter(e => e.date === selectedDay).map(ev => (
-                <View key={ev.id} style={styles.card}>
-                  <View style={styles.cardHeaderRow}>
-                    <Text style={styles.cardTitle}>⏰ {ev.time} - {ev.title}</Text>
-                    <TouchableOpacity onPress={() => handleDeleteEvent(ev.id)}>
-                      <Text style={{ color: '#ff0055', fontWeight: 'bold' }}>✕ Eliminar</Text>
-                    </TouchableOpacity>
-                  </View>
-                  <Text style={styles.cardSub}>{ev.details}</Text>
+              {showEventForm && (
+                <View style={styles.addSedeCard}>
+                  <TextInput style={styles.input} placeholder="Título del Evento" placeholderTextColor="#666" value={newEventTitle} onChangeText={setNewEventTitle} />
+                  <TextInput style={styles.input} placeholder="Hora (Ej: 7:00 PM)" placeholderTextColor="#666" value={newEventTime} onChangeText={setNewEventTime} />
+                  <TextInput style={styles.input} placeholder="Detalles" placeholderTextColor="#666" value={newEventDetails} onChangeText={setNewEventDetails} />
+                  <TouchableOpacity style={styles.actionBtn} onPress={handleSaveEvent}>
+                    <Text style={styles.actionBtnText}>Guardar Evento</Text>
+                  </TouchableOpacity>
                 </View>
-              ))
-            ) : (
-              <View style={styles.card}>
-                <Text style={[styles.cardSub, { textAlign: 'center' }]}>No hay eventos para este día.</Text>
-              </View>
-            )}
-          </ScrollView>
-        )}
+              )}
+
+              {eventsList.filter(e => e.date === selectedDay).length > 0 ? (
+                eventsList.filter(e => e.date === selectedDay).map(ev => (
+                  <View key={ev.id} style={styles.card}>
+                    <View style={styles.cardHeaderRow}>
+                      <Text style={styles.cardTitle}>⏰ {ev.time} - {ev.title}</Text>
+                      <TouchableOpacity onPress={() => handleDeleteEvent(ev.id)}>
+                        <Text style={{ color: '#ff0055', fontWeight: 'bold' }}>✕ Eliminar</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={styles.cardSub}>{ev.details}</Text>
+                  </View>
+                ))
+              ) : (
+                <View style={styles.card}>
+                  <Text style={[styles.cardSub, { textAlign: 'center' }]}>No hay eventos para este día.</Text>
+                </View>
+              )}
+            </ScrollView>
+          )}
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -496,6 +512,8 @@ const styles = StyleSheet.create({
   activeTabText: { color: '#00ffcc', fontWeight: 'bold' },
   refreshBtn: { backgroundColor: '#1f2937', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, marginRight: 10, borderWidth: 1, borderColor: '#374151' },
   refreshBtnText: { color: '#00ffcc', fontSize: 12, fontWeight: 'bold' },
+  mainWrapper: { flex: 1 },
+  desktopWrapper: { maxWidth: 1024, alignSelf: 'center', width: '100%' },
   content: { flex: 1, padding: 16 },
   sedesHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
   labelHeader: { fontSize: 12, fontWeight: 'bold', color: '#9ca3af' },
@@ -511,6 +529,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#ffffff' },
   centeredSectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#ffffff', textAlign: 'center', marginBottom: 12 },
   videoContainer: { height: 200, borderRadius: 16, overflow: 'hidden', marginBottom: 12, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#1f2937' },
+  desktopVideoContainer: { height: 380 },
   emptyVideoBox: { padding: 20, alignItems: 'center', justifyContent: 'center' },
   emptyVideoText: { color: '#ffffff', fontSize: 13, fontWeight: 'bold', textAlign: 'center' },
   addSedeToggleBtn: { borderStyle: 'dashed', borderWidth: 2, borderColor: '#00ffcc', padding: 12, borderRadius: 12, alignItems: 'center', marginBottom: 12, backgroundColor: '#111827' },
