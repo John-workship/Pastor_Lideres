@@ -5,7 +5,6 @@ import {
   View, 
   TouchableOpacity, 
   ScrollView, 
-  ActivityIndicator, 
   SafeAreaView,
   TextInput,
   Platform,
@@ -27,6 +26,7 @@ if (Platform.OS !== 'web') {
 export default function App() {
   const [activeTab, setActiveTab] = useState('live');
   const [refreshing, setRefreshing] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
   
   // Detección dinámica de las dimensiones de la pantalla
   const [screenData, setScreenData] = useState(Dimensions.get('window'));
@@ -40,6 +40,14 @@ export default function App() {
   }, []);
 
   const isDesktop = screenData.width >= 768;
+
+  const tabsList = [
+    { key: 'live', label: '📺 Transmisión' },
+    { key: 'prayers', label: '🙏 Oración' },
+    { key: 'comites', label: '👥 Comités' },
+    { key: 'finance', label: '💰 Tesorería' },
+    { key: 'services', label: '📋 Cultos' }
+  ];
 
   // Sedes
   const [sedesList, setSedesList] = useState([
@@ -264,34 +272,58 @@ export default function App() {
   const novDays = Array.from({ length: 30 }, (_, i) => `2026-11-${String(i + 1).padStart(2, '0')}`);
   const decDays = Array.from({ length: 31 }, (_, i) => `2026-12-${String(i + 1).padStart(2, '0')}`);
 
+  const activeTabObj = tabsList.find(t => t.key === activeTab);
+
   return (
     <SafeAreaView style={styles.container}>
-      {/* Barra Superior con Menú Adaptativo y Botón de Actualizar */}
+      {/* Header Superior Adaptativo */}
       <View style={styles.topBarContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabContainer}>
-          <TouchableOpacity style={[styles.tabButton, activeTab === 'live' && styles.activeTab]} onPress={() => setActiveTab('live')}>
-            <Text style={[styles.tabText, activeTab === 'live' && styles.activeTabText]}>📺 Transmisión</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.tabButton, activeTab === 'prayers' && styles.activeTab]} onPress={() => setActiveTab('prayers')}>
-            <Text style={[styles.tabText, activeTab === 'prayers' && styles.activeTabText]}>🙏 Oración</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.tabButton, activeTab === 'comites' && styles.activeTab]} onPress={() => setActiveTab('comites')}>
-            <Text style={[styles.tabText, activeTab === 'comites' && styles.activeTabText]}>👥 Comités</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.tabButton, activeTab === 'finance' && styles.activeTab]} onPress={() => setActiveTab('finance')}>
-            <Text style={[styles.tabText, activeTab === 'finance' && styles.activeTabText]}>💰 Tesorería</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.tabButton, activeTab === 'services' && styles.activeTab]} onPress={() => setActiveTab('services')}>
-            <Text style={[styles.tabText, activeTab === 'services' && styles.activeTabText]}>📋 Cultos</Text>
-          </TouchableOpacity>
-        </ScrollView>
+        {isDesktop ? (
+          // Vista Horizontal para Escritorio
+          <View style={styles.desktopTabRow}>
+            {tabsList.map(t => (
+              <TouchableOpacity key={t.key} style={[styles.tabButton, activeTab === t.key && styles.activeTab]} onPress={() => setActiveTab(t.key)}>
+                <Text style={[styles.tabText, activeTab === t.key && styles.activeTabText]}>{t.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : (
+          // Selector Desplegable (Dropdown) para Dispositivos Móviles
+          <View style={styles.mobileDropdownWrapper}>
+            <TouchableOpacity style={styles.dropdownSelector} onPress={() => setShowDropdown(!showDropdown)}>
+              <Text style={styles.dropdownSelectorText}>{activeTabObj?.label || 'Seleccionar Módulo'}</Text>
+              <Text style={styles.dropdownArrow}>{showDropdown ? '▲' : '▼'}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
+        {/* Botón de Refrescar Datos */}
         <TouchableOpacity style={styles.refreshBtn} onPress={fetchData} disabled={refreshing}>
-          <Text style={styles.refreshBtnText}>{refreshing ? '⏳...' : '🔄 Actualizar'}</Text>
+          <Text style={styles.refreshBtnText}>{refreshing ? '⏳' : '🔄'}</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Contenedor Principal Adaptativo según Escritorio o Móvil */}
+      {/* Menú Desplegable Flotante en Móviles */}
+      {!isDesktop && showDropdown && (
+        <View style={styles.dropdownMenu}>
+          {tabsList.map(t => (
+            <TouchableOpacity 
+              key={t.key} 
+              style={[styles.dropdownItem, activeTab === t.key && styles.activeDropdownItem]}
+              onPress={() => {
+                setActiveTab(t.key);
+                setShowDropdown(false);
+              }}
+            >
+              <Text style={[styles.dropdownItemText, activeTab === t.key && styles.activeDropdownItemText]}>
+                {t.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
+      {/* Contenedor Principal */}
       <View style={[styles.mainWrapper, isDesktop && styles.desktopWrapper]}>
         <View style={{ flex: 1, width: '100%' }}>
           {activeTab === 'live' && (
@@ -504,14 +536,23 @@ export default function App() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0b0f19' },
-  topBarContainer: { flexDirection: 'row', backgroundColor: '#111827', alignItems: 'center', borderBottomWidth: 1, borderColor: '#1f2937' },
-  tabContainer: { flex: 1, flexDirection: 'row', maxHeight: 55 },
+  topBarContainer: { flexDirection: 'row', backgroundColor: '#111827', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, height: 56, borderBottomWidth: 1, borderColor: '#1f2937', zIndex: 10 },
+  desktopTabRow: { flexDirection: 'row', flex: 1 },
   tabButton: { paddingHorizontal: 16, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
   activeTab: { borderBottomWidth: 3, borderBottomColor: '#00ffcc' },
   tabText: { fontSize: 14, color: '#9ca3af', fontWeight: '600' },
   activeTabText: { color: '#00ffcc', fontWeight: 'bold' },
-  refreshBtn: { backgroundColor: '#1f2937', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, marginRight: 10, borderWidth: 1, borderColor: '#374151' },
-  refreshBtnText: { color: '#00ffcc', fontSize: 12, fontWeight: 'bold' },
+  mobileDropdownWrapper: { flex: 1, marginRight: 10 },
+  dropdownSelector: { backgroundColor: '#1f2937', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: '#374151' },
+  dropdownSelectorText: { color: '#00ffcc', fontWeight: 'bold', fontSize: 14 },
+  dropdownArrow: { color: '#00ffcc', fontSize: 12, marginLeft: 8 },
+  dropdownMenu: { backgroundColor: '#111827', borderBottomWidth: 2, borderColor: '#00ffcc', paddingVertical: 4, position: 'absolute', top: 56, left: 0, right: 0, zIndex: 99 },
+  dropdownItem: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderColor: '#1f2937' },
+  activeDropdownItem: { backgroundColor: '#1f2937' },
+  dropdownItemText: { color: '#9ca3af', fontSize: 14, fontWeight: '600' },
+  activeDropdownItemText: { color: '#00ffcc', fontWeight: 'bold' },
+  refreshBtn: { backgroundColor: '#1f2937', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#374151' },
+  refreshBtnText: { color: '#00ffcc', fontSize: 14, fontWeight: 'bold' },
   mainWrapper: { flex: 1 },
   desktopWrapper: { maxWidth: 1024, alignSelf: 'center', width: '100%' },
   content: { flex: 1, padding: 16 },
