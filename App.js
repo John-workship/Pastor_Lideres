@@ -8,7 +8,8 @@ import {
   SafeAreaView,
   TextInput,
   Platform,
-  Dimensions 
+  Dimensions,
+  Switch 
 } from 'react-native';
 import { createClient } from '@supabase/supabase-js';
 
@@ -51,13 +52,14 @@ export default function App() {
 
   // Sedes
   const [sedesList, setSedesList] = useState([
-    { id: '1', nombre: 'IPUC Mosquera Tercera', url: '' }
+    { id: '1', nombre: 'IPUC Mosquera Tercera', url: '', isLive: false }
   ]);
   const [selectedSede, setSelectedSede] = useState(sedesList[0]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [newSedeName, setNewSedeName] = useState('');
   const [newSedeChannelUrl, setNewSedeChannelUrl] = useState('');
+  const [newSedeIsLive, setNewSedeIsLive] = useState(false);
 
   // Oración
   const [prayers, setPrayers] = useState([
@@ -144,12 +146,13 @@ export default function App() {
     const newSedeObj = {
       id: editingId || Date.now().toString(),
       nombre: finalName,
-      url: finalUrl
+      url: finalUrl,
+      isLive: newSedeIsLive
     };
 
     if (editingId) {
       setSedesList(sedesList.map(s => s.id === editingId ? newSedeObj : s));
-      await supabase.from('sedes').update({ nombre: finalName, url: finalUrl }).eq('id', editingId);
+      await supabase.from('sedes').update({ nombre: finalName, url: finalUrl, isLive: newSedeIsLive }).eq('id', editingId);
     } else {
       setSedesList([...sedesList, newSedeObj]);
       await supabase.from('sedes').insert([newSedeObj]);
@@ -158,6 +161,7 @@ export default function App() {
     setSelectedSede(newSedeObj);
     setNewSedeName('');
     setNewSedeChannelUrl('');
+    setNewSedeIsLive(false);
     setEditingId(null);
     setShowAddForm(false);
   };
@@ -283,7 +287,7 @@ export default function App() {
             {tabsList.map(t => (
               <TouchableOpacity key={t.key} style={[styles.tabButton, activeTab === t.key && styles.activeTab]} onPress={() => setActiveTab(t.key)}>
                 <Text style={[styles.tabText, activeTab === t.key && styles.activeTabText]}>
-                  {t.key === 'live' && selectedSede?.url && selectedSede.url.trim() !== '' ? '📺 Transmisión 🔴' : t.label}
+                  {t.key === 'live' && selectedSede?.isLive ? '📺 Transmisión 🔴' : t.label}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -292,7 +296,7 @@ export default function App() {
           <View style={styles.mobileDropdownWrapper}>
             <TouchableOpacity style={styles.dropdownSelector} onPress={() => setShowDropdown(!showDropdown)}>
               <Text style={styles.dropdownSelectorText}>
-                {activeTab === 'live' && selectedSede?.url && selectedSede.url.trim() !== '' ? '📺 Transmisión 🔴' : (activeTabObj?.label || 'Seleccionar Módulo')}
+                {activeTab === 'live' && selectedSede?.isLive ? '📺 Transmisión 🔴' : (activeTabObj?.label || 'Seleccionar Módulo')}
               </Text>
               <Text style={styles.dropdownArrow}>{showDropdown ? '▲' : '▼'}</Text>
             </TouchableOpacity>
@@ -317,7 +321,7 @@ export default function App() {
               }}
             >
               <Text style={[styles.dropdownItemText, activeTab === t.key && styles.activeDropdownItemText]}>
-                {t.key === 'live' && selectedSede?.url && selectedSede.url.trim() !== '' ? '📺 Transmisión 🔴' : t.label}
+                {t.key === 'live' && selectedSede?.isLive ? '📺 Transmisión 🔴' : t.label}
               </Text>
             </TouchableOpacity>
           ))}
@@ -332,7 +336,13 @@ export default function App() {
               <View style={styles.sedesHeaderRow}>
                 <Text style={styles.labelHeader}>Sedes Registradas:</Text>
                 {selectedSede && (
-                  <TouchableOpacity onPress={() => { setEditingId(selectedSede.id); setNewSedeName(selectedSede.nombre); setNewSedeChannelUrl(selectedSede.url); setShowAddForm(true); }}>
+                  <TouchableOpacity onPress={() => { 
+                    setEditingId(selectedSede.id); 
+                    setNewSedeName(selectedSede.nombre); 
+                    setNewSedeChannelUrl(selectedSede.url); 
+                    setNewSedeIsLive(selectedSede.isLive || false);
+                    setShowAddForm(true); 
+                  }}>
                     <Text style={styles.editSedeText}>✏️ Modificar Sede Actual</Text>
                   </TouchableOpacity>
                 )}
@@ -343,7 +353,7 @@ export default function App() {
                   <View key={item.id} style={styles.sedeChipWrapper}>
                     <TouchableOpacity style={[styles.sedeChip, selectedSede?.id === item.id && styles.activeSedeChip]} onPress={() => setSelectedSede(item)}>
                       <Text style={[styles.sedeChipText, selectedSede?.id === item.id && styles.activeSedeChipText]}>
-                        🏛️ {item.nombre} {item.url && item.url.trim() !== '' ? '🔴' : ''}
+                        🏛️ {item.nombre} {item.isLive ? '🔴' : ''}
                       </Text>
                     </TouchableOpacity>
                     {sedesList.length > 1 && (
@@ -357,7 +367,7 @@ export default function App() {
 
               <View style={styles.headerRow}>
                 <Text style={styles.sectionTitle}>{selectedSede?.nombre || 'Sede'}</Text>
-                {selectedSede?.url && selectedSede.url.trim() !== '' ? (
+                {selectedSede?.isLive ? (
                   <View style={styles.liveBadge}>
                     <Text style={styles.liveBadgeText}>🔴 EN DIRECTO</Text>
                   </View>
@@ -390,6 +400,18 @@ export default function App() {
                 <View style={styles.addSedeCard}>
                   <TextInput style={styles.input} placeholder="Nombre de la Sede" placeholderTextColor="#666" value={newSedeName} onChangeText={setNewSedeName} />
                   <TextInput style={styles.input} placeholder="URL de YouTube" placeholderTextColor="#666" value={newSedeChannelUrl} onChangeText={setNewSedeChannelUrl} />
+                  
+                  {/* Selector Manual de En Vivo / Offline */}
+                  <View style={styles.switchRow}>
+                    <Text style={styles.switchLabel}>¿Está en Transmisión En Vivo?</Text>
+                    <Switch
+                      trackColor={{ false: '#374151', true: '#00ffcc' }}
+                      thumbColor={newSedeIsLive ? '#0b0f19' : '#9ca3af'}
+                      onValueChange={setNewSedeIsLive}
+                      value={newSedeIsLive}
+                    />
+                  </View>
+
                   <TouchableOpacity style={styles.actionBtn} onPress={handleSaveSede}>
                     <Text style={styles.actionBtnText}>Guardar en Base de Datos</Text>
                   </TouchableOpacity>
@@ -583,6 +605,8 @@ const styles = StyleSheet.create({
   liveBadgeText: { color: '#ff3366', fontSize: 11, fontWeight: 'bold' },
   offlineBadge: { backgroundColor: '#1f2937', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: '#374151' },
   offlineBadgeText: { color: '#9ca3af', fontSize: 11, fontWeight: 'bold' },
+  switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1f2937', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#374151', marginBottom: 12 },
+  switchLabel: { color: '#ffffff', fontSize: 13, fontWeight: '600' },
   videoContainer: { height: 200, borderRadius: 16, overflow: 'hidden', marginBottom: 12, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#1f2937' },
   desktopVideoContainer: { height: 380 },
   emptyVideoBox: { padding: 20, alignItems: 'center', justifyContent: 'center' },
