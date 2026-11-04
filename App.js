@@ -133,12 +133,11 @@ export default function App() {
     fetchData();
   }, []);
 
-  // Guardar / Modificar Sede
+  // Guardar / Modificar Sede Corregido
   const handleSaveSede = async () => {
     const finalName = newSedeName.trim() || 'Nueva Sede';
     let finalUrl = newSedeChannelUrl.trim();
 
-    // Procesamiento seguro de URL de YouTube
     if (finalUrl.includes('watch?v=')) {
       const videoId = finalUrl.split('v=')[1]?.split('&')[0];
       finalUrl = `https://www.youtube.com/embed/${videoId}`;
@@ -146,25 +145,33 @@ export default function App() {
       const videoId = finalUrl.split('youtu.be/')[1]?.split('?')[0];
       finalUrl = `https://www.youtube.com/embed/${videoId}`;
     }
-    // Si es un enlace de canal o ya es embed, se deja intacto
-
-    const currentId = editingId || String(Date.now());
-    const newSedeObj = {
-      id: currentId,
-      nombre: finalName,
-      url: finalUrl,
-      isLive: newSedeIsLive
-    };
 
     if (editingId) {
-      setSedesList(prev => prev.map(s => String(s.id) === String(editingId) ? newSedeObj : s));
-      await supabase.from('sedes').upsert([newSedeObj]);
+      // Actualizar registro existente en Supabase de forma explícita
+      const updatedObj = {
+        nombre: finalName,
+        url: finalUrl,
+        isLive: newSedeIsLive
+      };
+
+      await supabase.from('sedes').update(updatedObj).eq('id', editingId);
+
+      setSedesList(prev => prev.map(s => String(s.id) === String(editingId) ? { ...s, ...updatedObj } : s));
+      setSelectedSede(prev => String(prev.id) === String(editingId) ? { ...prev, ...updatedObj } : prev);
     } else {
-      setSedesList(prev => [...prev, newSedeObj]);
+      // Crear nueva sede
+      const newSedeObj = {
+        id: String(Date.now()),
+        nombre: finalName,
+        url: finalUrl,
+        isLive: newSedeIsLive
+      };
+
       await supabase.from('sedes').insert([newSedeObj]);
+      setSedesList(prev => [...prev, newSedeObj]);
+      setSelectedSede(newSedeObj);
     }
 
-    setSelectedSede(newSedeObj);
     setNewSedeName('');
     setNewSedeChannelUrl('');
     setNewSedeIsLive(false);
@@ -400,7 +407,13 @@ export default function App() {
                 )}
               </View>
 
-              <TouchableOpacity style={styles.addSedeToggleBtn} onPress={() => setShowAddForm(!showAddForm)}>
+              <TouchableOpacity style={styles.addSedeToggleBtn} onPress={() => {
+                setEditingId(null);
+                setNewSedeName('');
+                setNewSedeChannelUrl('');
+                setNewSedeIsLive(false);
+                setShowAddForm(!showAddForm);
+              }}>
                 <Text style={styles.addSedeToggleText}>{showAddForm ? '❌ Cancelar' : '➕ Registrar Nueva Sede'}</Text>
               </TouchableOpacity>
 
