@@ -1,0 +1,29 @@
+{
+  "name": "soundteam",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "build:web": "npx expo export --platform web"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "expo": "~54.0.0",
+    "expo-status-bar": "~2.0.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-native": "0.76.0",
+    "react-native-web": "~0.19.13"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.0"
+  },
+  "expo": {
+    "name": "soundteam",
+    "slug": "soundteam",
+    "version": "1.0.0"
+  }
+}
