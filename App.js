@@ -133,7 +133,7 @@ export default function App() {
     fetchData();
   }, []);
 
-  // Guardar / Modificar Sede Corregido
+  // Guardar / Modificar Sede Estable (Sin parpadeo)
   const handleSaveSede = async () => {
     const finalName = newSedeName.trim() || 'Nueva Sede';
     let finalUrl = newSedeChannelUrl.trim();
@@ -147,19 +147,19 @@ export default function App() {
     }
 
     if (editingId) {
-      // Actualizar registro existente en Supabase de forma explícita
       const updatedObj = {
         nombre: finalName,
         url: finalUrl,
         isLive: newSedeIsLive
       };
 
-      await supabase.from('sedes').update(updatedObj).eq('id', editingId);
-
+      // Actualizar localmente de inmediato
       setSedesList(prev => prev.map(s => String(s.id) === String(editingId) ? { ...s, ...updatedObj } : s));
       setSelectedSede(prev => String(prev.id) === String(editingId) ? { ...prev, ...updatedObj } : prev);
+
+      // Guardar en Supabase en segundo plano
+      await supabase.from('sedes').update(updatedObj).eq('id', editingId);
     } else {
-      // Crear nueva sede
       const newSedeObj = {
         id: String(Date.now()),
         nombre: finalName,
@@ -167,9 +167,10 @@ export default function App() {
         isLive: newSedeIsLive
       };
 
-      await supabase.from('sedes').insert([newSedeObj]);
       setSedesList(prev => [...prev, newSedeObj]);
       setSelectedSede(newSedeObj);
+
+      await supabase.from('sedes').insert([newSedeObj]);
     }
 
     setNewSedeName('');
@@ -177,8 +178,6 @@ export default function App() {
     setNewSedeIsLive(false);
     setEditingId(null);
     setShowAddForm(false);
-
-    fetchData();
   };
 
   const handleDeleteSede = async (idToDelete) => {
