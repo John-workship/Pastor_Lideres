@@ -133,7 +133,7 @@ export default function App() {
     fetchData();
   }, []);
 
-  // Guardar / Modificar Sede Estable (Sin parpadeo)
+  // Guardar / Modificar Sede con actualización directa garantizada en Supabase
   const handleSaveSede = async () => {
     const finalName = newSedeName.trim() || 'Nueva Sede';
     let finalUrl = newSedeChannelUrl.trim();
@@ -147,18 +147,25 @@ export default function App() {
     }
 
     if (editingId) {
-      const updatedObj = {
+      const updatedData = {
         nombre: finalName,
         url: finalUrl,
         isLive: newSedeIsLive
       };
 
-      // Actualizar localmente de inmediato
-      setSedesList(prev => prev.map(s => String(s.id) === String(editingId) ? { ...s, ...updatedObj } : s));
-      setSelectedSede(prev => String(prev.id) === String(editingId) ? { ...prev, ...updatedObj } : prev);
+      // Actualización directa en la tabla 'sedes' usando eq('id', editingId)
+      const { error } = await supabase
+        .from('sedes')
+        .update(updatedData)
+        .eq('id', editingId);
 
-      // Guardar en Supabase en segundo plano
-      await supabase.from('sedes').update(updatedObj).eq('id', editingId);
+      if (error) {
+        console.log('Error al actualizar en Supabase:', error);
+      }
+
+      // Actualizar estado local inmediatamente
+      setSedesList(prev => prev.map(s => String(s.id) === String(editingId) ? { ...s, ...updatedData } : s));
+      setSelectedSede(prev => String(prev.id) === String(editingId) ? { ...prev, ...updatedData } : prev);
     } else {
       const newSedeObj = {
         id: String(Date.now()),
@@ -167,10 +174,13 @@ export default function App() {
         isLive: newSedeIsLive
       };
 
+      const { error } = await supabase.from('sedes').insert([newSedeObj]);
+      if (error) {
+        console.log('Error al insertar en Supabase:', error);
+      }
+
       setSedesList(prev => [...prev, newSedeObj]);
       setSelectedSede(newSedeObj);
-
-      await supabase.from('sedes').insert([newSedeObj]);
     }
 
     setNewSedeName('');
