@@ -153,7 +153,6 @@ export default function App() {
         isLive: newSedeIsLive
       };
 
-      // Actualización directa en la tabla 'sedes' usando eq('id', editingId)
       const { error } = await supabase
         .from('sedes')
         .update(updatedData)
@@ -163,7 +162,6 @@ export default function App() {
         console.log('Error al actualizar en Supabase:', error);
       }
 
-      // Actualizar estado local inmediatamente
       setSedesList(prev => prev.map(s => String(s.id) === String(editingId) ? { ...s, ...updatedData } : s));
       setSelectedSede(prev => String(prev.id) === String(editingId) ? { ...prev, ...updatedData } : prev);
     } else {
