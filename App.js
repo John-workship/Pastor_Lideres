@@ -29,13 +29,10 @@ export default function App() {
   const [refreshing, setRefreshing] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   
-  // Detección dinámica de las dimensiones de la pantalla
   const [screenData, setScreenData] = useState(Dimensions.get('window'));
 
   useEffect(() => {
-    const onChange = (result) => {
-      setScreenData(result.window);
-    };
+    const onChange = (result) => setScreenData(result.window);
     const dimensionListener = Dimensions.addEventListener('change', onChange);
     return () => dimensionListener?.remove();
   }, []);
@@ -99,19 +96,15 @@ export default function App() {
   const [newEventTime, setNewEventTime] = useState('');
   const [newEventDetails, setNewEventDetails] = useState('');
 
-  // Sincronizar datos con Supabase
+  // Sincronización robusta con Supabase
   const fetchData = async () => {
     setRefreshing(true);
     try {
       const { data: sedesData, error } = await supabase.from('sedes').select('*');
       if (!error && sedesData && sedesData.length > 0) {
-        // Asegurar que los IDs se traten consistentemente como texto
         const formattedSedes = sedesData.map(s => ({ ...s, id: String(s.id) }));
         setSedesList(formattedSedes);
-        setSelectedSede(prev => {
-          const match = formattedSedes.find(s => s.id === String(prev?.id));
-          return match || formattedSedes[0];
-        });
+        setSelectedSede(prev => formattedSedes.find(s => s.id === String(prev?.id)) || formattedSedes[0]);
       }
 
       const { data: comitesData } = await supabase.from('comites').select('*');
@@ -126,7 +119,7 @@ export default function App() {
       const { data: prayersData } = await supabase.from('prayers').select('*');
       if (prayersData && prayersData.length > 0) setPrayers(prayersData);
     } catch (err) {
-      console.log('Error sincronizando con Supabase:', err);
+      console.log('Error de sincronización:', err);
     }
     setRefreshing(false);
   };
@@ -135,7 +128,7 @@ export default function App() {
     fetchData();
   }, []);
 
-  // Guardar / Modificar Sede con persistencia robusta
+  // Lógica lógica y directa de guardado mediante UPSERT
   const handleSaveSede = async () => {
     const finalName = newSedeName.trim() || 'Nueva Sede';
     let finalUrl = newSedeChannelUrl.trim();
@@ -148,42 +141,32 @@ export default function App() {
       finalUrl = `https://www.youtube.com/embed/${videoId}`;
     }
 
+    const targetId = editingId ? String(editingId) : String(Date.now());
+    
+    const payload = {
+      id: targetId,
+      nombre: finalName,
+      url: finalUrl,
+      isLive: newSedeIsLive
+    };
+
+    // Actualización inmediata en UI para evitar latencia visual
     if (editingId) {
-      const targetId = String(editingId);
-      const updatedData = {
-        nombre: finalName,
-        url: finalUrl,
-        isLive: newSedeIsLive
-      };
-
-      // Forzar actualización exacta en Supabase
-      const { error } = await supabase
-        .from('sedes')
-        .update(updatedData)
-        .eq('id', targetId);
-
-      if (error) {
-        console.log('Error actualizando en Supabase:', error);
-      }
-
-      // Actualizar estado local
-      setSedesList(prev => prev.map(s => String(s.id) === targetId ? { ...s, ...updatedData } : s));
-      setSelectedSede(prev => String(prev?.id) === targetId ? { ...prev, ...updatedData } : prev);
+      setSedesList(prev => prev.map(s => s.id === targetId ? payload : s));
+      setSelectedSede(payload);
     } else {
-      const newSedeObj = {
-        id: String(Date.now()),
-        nombre: finalName,
-        url: finalUrl,
-        isLive: newSedeIsLive
-      };
+      setSedesList(prev => [...prev, payload]);
+      setSelectedSede(payload);
+    }
 
-      const { error } = await supabase.from('sedes').insert([newSedeObj]);
-      if (error) {
-        console.log('Error insertando en Supabase:', error);
-      }
-
-      setSedesList(prev => [...prev, newSedeObj]);
-      setSelectedSede(newSedeObj);
+    // Persistencia infalible con upsert en Supabase
+    const { error } = await supabase.from('sedes').upsert([payload]);
+    if (error) {
+      console.error('Error crítico al guardar en Supabase:', error.message);
+      alert('Error al guardar en la base de datos: ' + error.message);
+    } else {
+      // Recargar datos oficiales del servidor tras confirmar éxito
+      fetchData();
     }
 
     setNewSedeName('');
@@ -196,119 +179,97 @@ export default function App() {
   const handleDeleteSede = async (idToDelete) => {
     if (sedesList.length <= 1) return;
     const targetId = String(idToDelete);
-    const updated = sedesList.filter(s => String(s.id) !== targetId);
-    setSedesList(updated);
-    if (String(selectedSede?.id) === targetId) setSelectedSede(updated[0]);
+    setSedesList(prev => prev.filter(s => s.id !== targetId));
+    if (String(selectedSede?.id) === targetId) setSelectedSede(sedesList[0]);
     await supabase.from('sedes').delete().eq('id', targetId);
   };
 
-  // Guardar Oración
   const addPrayer = async () => {
     if (newPrayer.trim() === '') return;
-    const newPrayerObj = {
-      id: Date.now().toString(),
-      name: 'Tú',
-      request: newPrayer.trim()
-    };
-    
-    setPrayers([newPrayerObj, ...prayers]);
-    await supabase.from('prayers').insert([newPrayerObj]);
+    const newObj = { id: String(Date.now()), name: 'Tú', request: newPrayer.trim() };
+    setPrayers(prev => [newObj, ...prev]);
+    await supabase.from('prayers').insert([newObj]);
     setNewPrayer('');
   };
 
-  // Guardar Comité
   const handleSaveComite = async () => {
-    const finalName = newComiteName.trim() || 'Comité sin nombre';
-    const finalDesc = newComiteDesc.trim();
-    const newComite = {
-      id: editingComiteId || Date.now().toString(),
-      nombre: finalName,
-      descripcion: finalDesc
+    const payload = {
+      id: editingComiteId ? String(editingComiteId) : String(Date.now()),
+      nombre: newComiteName.trim() || 'Comité',
+      descripcion: newComiteDesc.trim()
     };
-
     if (editingComiteId) {
-      setComitesList(comitesList.map(c => c.id === editingComiteId ? newComite : c));
-      await supabase.from('comites').update({ nombre: finalName, descripcion: finalDesc }).eq('id', editingComiteId);
+      setComitesList(prev => prev.map(c => c.id === payload.id ? payload : c));
+      await supabase.from('comites').upsert([payload]);
     } else {
-      setComitesList([...comitesList, newComite]);
-      await supabase.from('comites').insert([newComite]);
+      setComitesList(prev => [...prev, payload]);
+      await supabase.from('comites').insert([payload]);
     }
-
     setNewComiteName('');
     setNewComiteDesc('');
     setEditingComiteId(null);
     setShowComiteForm(false);
   };
 
-  const handleDeleteComite = async (idToDelete) => {
-    setComitesList(comitesList.filter(c => c.id !== idToDelete));
-    await supabase.from('comites').delete().eq('id', idToDelete);
+  const handleDeleteComite = async (id) => {
+    setComitesList(prev => prev.filter(c => c.id !== String(id)));
+    await supabase.from('comites').delete().eq('id', String(id));
   };
 
-  // Guardar Tesorería
   const handleSaveFinance = async () => {
-    const finalLabel = newFinanceLabel.trim() || 'Nuevo Fondo';
-    const finalAmount = newFinanceAmount.trim() || '$ 0.00';
-    const newFinance = {
-      id: editingFinanceId || Date.now().toString(),
-      label: finalLabel,
-      amount: finalAmount,
+    const payload = {
+      id: editingFinanceId ? String(editingFinanceId) : String(Date.now()),
+      label: newFinanceLabel.trim() || 'Fondo',
+      amount: newFinanceAmount.trim() || '$ 0.00',
       color: '#00ffcc'
     };
-
     if (editingFinanceId) {
-      setFinanceList(financeList.map(f => f.id === editingFinanceId ? newFinance : f));
-      await supabase.from('finance').update({ label: finalLabel, amount: finalAmount }).eq('id', editingFinanceId);
+      setFinanceList(prev => prev.map(f => f.id === payload.id ? payload : f));
+      await supabase.from('finance').upsert([payload]);
     } else {
-      setFinanceList([...financeList, newFinance]);
-      await supabase.from('finance').insert([newFinance]);
+      setFinanceList(prev => [...prev, payload]);
+      await supabase.from('finance').insert([payload]);
     }
-
     setNewFinanceLabel('');
     setNewFinanceAmount('');
     setEditingFinanceId(null);
     setShowFinanceForm(false);
   };
 
-  const handleDeleteFinance = async (idToDelete) => {
+  const handleDeleteFinance = async (id) => {
     if (financeList.length <= 1) return;
-    setFinanceList(financeList.filter(f => f.id !== idToDelete));
-    await supabase.from('finance').delete().eq('id', idToDelete);
+    setFinanceList(prev => prev.filter(f => f.id !== String(id)));
+    await supabase.from('finance').delete().eq('id', String(id));
   };
 
-  // Guardar Evento
   const handleSaveEvent = async () => {
     if (!newEventTitle.trim()) return;
-    const newEvent = {
-      id: Date.now().toString(),
+    const payload = {
+      id: String(Date.now()),
       date: selectedDay,
       title: newEventTitle.trim(),
       time: newEventTime.trim() || '6:00 PM',
-      details: newEventDetails.trim() || 'Sin detalles adicionales'
+      details: newEventDetails.trim() || ''
     };
-
-    setEventsList([...eventsList, newEvent]);
-    await supabase.from('events').insert([newEvent]);
-
+    setEventsList(prev => [...prev, payload]);
+    await supabase.from('events').insert([payload]);
     setNewEventTitle('');
     setNewEventTime('');
     setNewEventDetails('');
     setShowEventForm(false);
   };
 
-  const handleDeleteEvent = async (idToDelete) => {
-    setEventsList(eventsList.filter(e => e.id !== idToDelete));
-    await supabase.from('events').delete().eq('id', idToDelete);
+  const handleDeleteEvent = async (id) => {
+    setEventsList(prev => prev.filter(e => e.id !== String(id)));
+    await supabase.from('events').delete().eq('id', String(id));
   };
 
   const novDays = Array.from({ length: 30 }, (_, i) => `2026-11-${String(i + 1).padStart(2, '0')}`);
   const decDays = Array.from({ length: 31 }, (_, i) => `2026-12-${String(i + 1).padStart(2, '0')}`);
-
   const activeTabObj = tabsList.find(t => t.key === activeTab);
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header Superior Adaptativo */}
       <View style={styles.topBarContainer}>
         {isDesktop ? (
           <View style={styles.desktopTabRow}>
@@ -336,17 +297,13 @@ export default function App() {
         </TouchableOpacity>
       </View>
 
-      {/* Menú Desplegable Flotante en Móviles */}
       {!isDesktop && showDropdown && (
         <View style={styles.dropdownMenu}>
           {tabsList.map(t => (
             <TouchableOpacity 
               key={t.key} 
               style={[styles.dropdownItem, activeTab === t.key && styles.activeDropdownItem]}
-              onPress={() => {
-                setActiveTab(t.key);
-                setShowDropdown(false);
-              }}
+              onPress={() => { setActiveTab(t.key); setShowDropdown(false); }}
             >
               <Text style={[styles.dropdownItemText, activeTab === t.key && styles.activeDropdownItemText]}>
                 {t.key === 'live' && selectedSede?.isLive ? '📺 Transmisión 🔴' : t.label}
@@ -356,7 +313,6 @@ export default function App() {
         </View>
       )}
 
-      {/* Contenedor Principal */}
       <View style={[styles.mainWrapper, isDesktop && styles.desktopWrapper]}>
         <View style={{ flex: 1, width: '100%' }}>
           {activeTab === 'live' && (
@@ -396,13 +352,9 @@ export default function App() {
               <View style={styles.headerRow}>
                 <Text style={styles.sectionTitle}>{selectedSede?.nombre || 'Sede'}</Text>
                 {selectedSede?.isLive ? (
-                  <View style={styles.liveBadge}>
-                    <Text style={styles.liveBadgeText}>🔴 EN DIRECTO</Text>
-                  </View>
+                  <View style={styles.liveBadge}><Text style={styles.liveBadgeText}>🔴 EN DIRECTO</Text></View>
                 ) : (
-                  <View style={styles.offlineBadge}>
-                    <Text style={styles.offlineBadgeText}>⚪ OFFLINE</Text>
-                  </View>
+                  <View style={styles.offlineBadge}><Text style={styles.offlineBadgeText}>⚪ OFFLINE</Text></View>
                 )}
               </View>
 
@@ -435,7 +387,6 @@ export default function App() {
                   <TextInput style={styles.input} placeholder="Nombre de la Sede" placeholderTextColor="#666" value={newSedeName} onChangeText={setNewSedeName} />
                   <TextInput style={styles.input} placeholder="URL de YouTube" placeholderTextColor="#666" value={newSedeChannelUrl} onChangeText={setNewSedeChannelUrl} />
                   
-                  {/* Selector Manual de En Vivo / Offline */}
                   <View style={styles.switchRow}>
                     <Text style={styles.switchLabel}>¿Está en Transmisión En Vivo?</Text>
                     <Switch
@@ -660,7 +611,7 @@ const styles = StyleSheet.create({
   metricCard: { width: '48%', backgroundColor: '#111827', padding: 14, borderRadius: 14, borderWidth: 1.5, borderColor: '#1f2937', marginBottom: 10 },
   metricLabel: { fontSize: 12, color: '#9ca3af', fontWeight: '600' },
   metricValue: { fontSize: 18, fontWeight: 'bold', marginTop: 4 },
-  daysScroll: { flexDirection: 'row', marginVertical: 8 },
+  daysScroll: { flexDirection: 'row', marginVersion: 8 },
   dayBox: { width: 44, height: 48, backgroundColor: '#111827', justifyContent: 'center', alignItems: 'center', borderRadius: 10, borderWidth: 1.5, borderColor: '#1f2937', marginRight: 6 },
   selectedDayBox: { backgroundColor: '#00ffcc', borderColor: '#00ffcc' },
   dayText: { fontSize: 14, fontWeight: 'bold', color: '#d1d5db' },
