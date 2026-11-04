@@ -69,8 +69,8 @@ export default function App() {
 
   // Estado para la Gestión de Tesorería / Finanzas
   const [financeList, setFinanceList] = useState([
-    { id: '1', label: 'Diezmos Registrados', amount: '$ 0.00', color: '#2e7d32' },
-    { id: '2', label: 'Fondos de Pro-Templo', amount: '$ 0.00', color: '#0066cc' }
+    { id: '1', label: 'Diezmos Registrados', amount: '$ 0.00', color: '#00ffcc' },
+    { id: '2', label: 'Fondos de Pro-Templo', amount: '$ 0.00', color: '#00e5ff' }
   ]);
   const [showFinanceForm, setShowFinanceForm] = useState(false);
   const [editingFinanceId, setEditingFinanceId] = useState(null);
@@ -271,7 +271,7 @@ export default function App() {
         id: Date.now().toString(),
         label: finalLabel,
         amount: finalAmount,
-        color: '#0066cc'
+        color: '#00ffcc'
       };
       setFinanceList([...financeList, newFinance]);
     }
@@ -313,7 +313,6 @@ export default function App() {
     setShowEventForm(false);
   };
 
-  // Eliminar evento de cultos
   const handleDeleteEvent = (idToDelete) => {
     setEventsList(eventsList.filter(e => e.id !== idToDelete));
   };
@@ -324,13 +323,12 @@ export default function App() {
     setNewPrayer('');
   };
 
-  // Generador de días para Noviembre (30 días) y Diciembre (31 días) de 2026
   const novDays = Array.from({ length: 30 }, (_, i) => `2026-11-${String(i + 1).padStart(2, '0')}`);
   const decDays = Array.from({ length: 31 }, (_, i) => `2026-12-${String(i + 1).padStart(2, '0')}`);
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Menú Superior */}
+      {/* Menú Superior Neón */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabContainer}>
         <TouchableOpacity 
           style={[styles.tabButton, activeTab === 'live' && styles.activeTab]} 
@@ -481,14 +479,16 @@ export default function App() {
                 <TextInput
                   style={styles.input}
                   placeholder="Nombre de la Sede (Opcional)"
+                  placeholderTextColor="#666"
                   value={newSedeName}
                   onChangeText={setNewSedeName}
                 />
                 <TextInput
                   style={styles.input}
                   placeholder="URL de YouTube o ID del canal (Opcional)"
+                  placeholderTextColor="#666"
                   value={newSedeChannelUrl}
-                  onChangeText={setNewSedeChannelUrl}
+                  onChangeText={newSedeChannelUrl => setNewSedeChannelUrl(newSedeChannelUrl)}
                 />
 
                 <TouchableOpacity style={styles.actionBtn} onPress={handleSaveSede}>
@@ -501,7 +501,7 @@ export default function App() {
 
             <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Servicios Recientes</Text>
             {loadingMedia ? (
-              <ActivityIndicator size="small" color="#0066cc" />
+              <ActivityIndicator size="small" color="#00ffcc" />
             ) : (
               pastServices.map((item) => (
                 <View key={item.id} style={styles.card}>
@@ -523,6 +523,7 @@ export default function App() {
               <TextInput 
                 style={styles.input} 
                 placeholder="Escribe tu petición de oración..." 
+                placeholderTextColor="#666"
                 value={newPrayer} 
                 onChangeText={setNewPrayer}
               />
@@ -591,12 +592,14 @@ export default function App() {
                 <TextInput
                   style={styles.input}
                   placeholder="Nombre del Comité"
+                  placeholderTextColor="#666"
                   value={newComiteName}
                   onChangeText={setNewComiteName}
                 />
                 <TextInput
                   style={styles.input}
                   placeholder="Descripción o funciones del comité"
+                  placeholderTextColor="#666"
                   value={newComiteDesc}
                   onChangeText={setNewComiteDesc}
                 />
@@ -626,12 +629,12 @@ export default function App() {
                       </TouchableOpacity>
                       {financeList.length > 1 && (
                         <TouchableOpacity onPress={() => handleDeleteFinance(item.id)}>
-                          <Text style={{ fontSize: 12, color: 'red', fontWeight: 'bold' }}>✕</Text>
+                          <Text style={{ fontSize: 12, color: '#ff0055', fontWeight: 'bold' }}>✕</Text>
                         </TouchableOpacity>
                       )}
                     </View>
                   </View>
-                  <Text style={[styles.metricValue, { color: item.color || '#0066cc' }]}>{item.amount}</Text>
+                  <Text style={[styles.metricValue, { color: item.color || '#00ffcc' }]}>{item.amount}</Text>
                 </View>
               ))}
             </View>
@@ -660,12 +663,14 @@ export default function App() {
                 <TextInput
                   style={styles.input}
                   placeholder="Nombre del Fondo (Ej: Ofrendas Misioneras)"
+                  placeholderTextColor="#666"
                   value={newFinanceLabel}
-                  onChangeText={newFinanceLabel => setNewFinanceLabel(newFinanceLabel)}
+                  onChangeText={setNewFinanceLabel}
                 />
                 <TextInput
                   style={styles.input}
                   placeholder="Monto o Valor (Ej: $ 1,500,000)"
+                  placeholderTextColor="#666"
                   value={newFinanceAmount}
                   onChangeText={setNewFinanceAmount}
                 />
@@ -749,18 +754,21 @@ export default function App() {
                 <TextInput
                   style={styles.input}
                   placeholder="Título del Culto o Evento (Ej: Culto Especial)"
+                  placeholderTextColor="#666"
                   value={newEventTitle}
                   onChangeText={setNewEventTitle}
                 />
                 <TextInput
                   style={styles.input}
                   placeholder="Hora (Ej: 7:00 PM)"
+                  placeholderTextColor="#666"
                   value={newEventTime}
                   onChangeText={setNewEventTime}
                 />
                 <TextInput
                   style={styles.input}
                   placeholder="Detalles / Predicador / Notas"
+                  placeholderTextColor="#666"
                   value={newEventDetails}
                   onChangeText={setNewEventDetails}
                 />
@@ -777,7 +785,7 @@ export default function App() {
                   <View style={styles.cardHeaderRow}>
                     <Text style={styles.cardTitle}>⏰ {ev.time} - {ev.title}</Text>
                     <TouchableOpacity onPress={() => handleDeleteEvent(ev.id)}>
-                      <Text style={{ color: 'red', fontWeight: 'bold' }}>✕ Eliminar</Text>
+                      <Text style={{ color: '#ff0055', fontWeight: 'bold' }}>✕ Eliminar</Text>
                     </TouchableOpacity>
                   </View>
                   <Text style={styles.cardSub}>{ev.details}</Text>
@@ -796,61 +804,61 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f7' },
-  tabContainer: { flexDirection: 'row', backgroundColor: '#ffffff', maxHeight: 55, borderBottomWidth: 1, borderColor: '#e5e5ea' },
+  container: { flex: 1, backgroundColor: '#0b0f19' }, // Fondo oscuro espacial
+  tabContainer: { flexDirection: 'row', backgroundColor: '#111827', maxHeight: 55, borderBottomWidth: 1, borderColor: '#1f2937' },
   tabButton: { paddingHorizontal: 16, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
-  activeTab: { borderBottomWidth: 3, borderBottomColor: '#0066cc' },
-  tabText: { fontSize: 14, color: '#666', fontWeight: '500' },
-  activeTabText: { color: '#0066cc', fontWeight: 'bold' },
+  activeTab: { borderBottomWidth: 3, borderBottomColor: '#00ffcc' }, // Cian Neón Brillante
+  tabText: { fontSize: 14, color: '#9ca3af', fontWeight: '600' },
+  activeTabText: { color: '#00ffcc', fontWeight: 'bold' },
   content: { flex: 1, padding: 16 },
   sedesHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-  labelHeader: { fontSize: 12, fontWeight: 'bold', color: '#666' },
-  editSedeText: { fontSize: 12, fontWeight: 'bold', color: '#0066cc' },
+  labelHeader: { fontSize: 12, fontWeight: 'bold', color: '#9ca3af' },
+  editSedeText: { fontSize: 12, fontWeight: 'bold', color: '#00ffcc' },
   sedeChipWrapper: { flexDirection: 'row', alignItems: 'center', marginRight: 8 },
-  sedeChip: { backgroundColor: '#e0e0e0', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
-  activeSedeChip: { backgroundColor: '#0066cc' },
-  sedeChipText: { fontSize: 13, color: '#333' },
-  activeSedeChipText: { color: '#fff', fontWeight: 'bold' },
-  deleteBtn: { backgroundColor: '#ff5252', width: 18, height: 18, borderRadius: 9, justifyContent: 'center', alignItems: 'center', marginLeft: -6, marginTop: -10, zIndex: 2 },
-  deleteBtnText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
+  sedeChip: { backgroundColor: '#1f2937', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: '#374151' },
+  activeSedeChip: { backgroundColor: '#00ffcc', borderColor: '#00ffcc' },
+  sedeChipText: { fontSize: 13, color: '#d1d5db' },
+  activeSedeChipText: { color: '#0b0f19', fontWeight: 'bold' },
+  deleteBtn: { backgroundColor: '#ff0055', width: 18, height: 18, borderRadius: 9, justifyContent: 'center', alignItems: 'center', marginLeft: -6, marginTop: -10, zIndex: 2 },
+  deleteBtnText: { color: '#ffffff', fontSize: 10, fontWeight: 'bold' },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#1c1c1e' },
-  centeredSectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#1c1c1e', textAlign: 'center', marginBottom: 12 },
-  liveBadge: { backgroundColor: '#ffebee', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: '#ef5350' },
-  liveBadgeText: { color: '#c62828', fontSize: 11, fontWeight: 'bold' },
-  offlineBadge: { backgroundColor: '#f5f5f5', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: '1px', borderColor: '#e0e0e0' },
-  offlineBadgeText: { color: '#757575', fontSize: 11, fontWeight: 'bold' },
-  videoContainer: { height: 200, borderRadius: 12, overflow: 'hidden', marginBottom: 12, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
+  sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#ffffff' },
+  centeredSectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#ffffff', textAlign: 'center', marginBottom: 12 },
+  liveBadge: { backgroundColor: '#3f0d12', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: '#ff0055' },
+  liveBadgeText: { color: '#ff3366', fontSize: 11, fontWeight: 'bold' },
+  offlineBadge: { backgroundColor: '#1f2937', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: '#374151' },
+  offlineBadgeText: { color: '#9ca3af', fontSize: 11, fontWeight: 'bold' },
+  videoContainer: { height: 200, borderRadius: 16, overflow: 'hidden', marginBottom: 12, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#1f2937' },
   emptyVideoBox: { padding: 20, alignItems: 'center', justifyContent: 'center' },
-  emptyVideoText: { color: '#fff', fontSize: 13, fontWeight: 'bold', textAlign: 'center', marginBottom: 6 },
-  emptyVideoSubText: { color: '#aaa', fontSize: 11, textAlign: 'center' },
-  addSedeToggleBtn: { borderStyle: 'dashed', borderWidth: 1, borderColor: '#0066cc', padding: 10, borderRadius: 8, alignItems: 'center', marginBottom: 12 },
-  addSedeToggleText: { color: '#0066cc', fontWeight: 'bold', fontSize: 13 },
-  addSedeCard: { backgroundColor: '#fff', padding: 14, borderRadius: 10, marginBottom: 12, borderWidth: 1, borderColor: '#0066cc' },
-  card: { backgroundColor: '#fff', padding: 16, borderRadius: 10, marginBottom: 10, borderWidth: 1, borderColor: '#e5e5ea' },
+  emptyVideoText: { color: '#ffffff', fontSize: 13, fontWeight: 'bold', textAlign: 'center', marginBottom: 6 },
+  emptyVideoSubText: { color: '#9ca3af', fontSize: 11, textAlign: 'center' },
+  addSedeToggleBtn: { borderStyle: 'dashed', borderWidth: 2, borderColor: '#00ffcc', padding: 12, borderRadius: 12, alignItems: 'center', marginBottom: 12, backgroundColor: '#111827' },
+  addSedeToggleText: { color: '#00ffcc', fontWeight: 'bold', fontSize: 13 },
+  addSedeCard: { backgroundColor: '#111827', padding: 16, borderRadius: 14, marginBottom: 12, borderWidth: 2, borderColor: '#00ffcc', shadowColor: '#00ffcc', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
+  card: { backgroundColor: '#111827', padding: 16, borderRadius: 14, marginBottom: 10, borderWidth: 1, borderColor: '#1f2937' },
   cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  cardTitle: { fontSize: 15, fontWeight: 'bold', color: '#1c1c1e', marginBottom: 8 },
-  cardSub: { fontSize: 13, color: '#6c757d', marginTop: 4 },
-  smallEditBtn: { backgroundColor: '#e0f2fe', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginRight: 6 },
-  smallEditText: { color: '#0369a1', fontSize: 11, fontWeight: 'bold' },
-  smallDeleteBtn: { backgroundColor: '#fee2e2', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  smallDeleteText: { color: '#b91c1c', fontSize: 11, fontWeight: 'bold' },
+  cardTitle: { fontSize: 15, fontWeight: 'bold', color: '#ffffff', marginBottom: 4 },
+  cardSub: { fontSize: 13, color: '#9ca3af', marginTop: 2 },
+  smallEditBtn: { backgroundColor: '#1f2937', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, marginRight: 6, borderWidth: 1, borderColor: '#374151' },
+  smallEditText: { color: '#00ffcc', fontSize: 11, fontWeight: 'bold' },
+  smallDeleteBtn: { backgroundColor: '#3f0d12', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: '#ff0055' },
+  smallDeleteText: { color: '#ff0055', fontSize: 11, fontWeight: 'bold' },
   formGroup: { marginBottom: 16 },
-  input: { backgroundColor: '#fff', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#ccc', marginBottom: 8 },
-  actionBtn: { backgroundColor: '#0066cc', padding: 12, borderRadius: 8, alignItems: 'center' },
-  actionBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
+  input: { backgroundColor: '#1f2937', padding: 12, borderRadius: 10, borderWidth: 1.5, borderColor: '#374151', marginBottom: 8, color: '#ffffff', fontSize: 14 },
+  actionBtn: { backgroundColor: '#00ffcc', padding: 14, borderRadius: 12, alignItems: 'center', shadowColor: '#00ffcc', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 3 },
+  actionBtnText: { color: '#0b0f19', fontWeight: 'bold', fontSize: 14 },
   metricContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 10 },
-  metricCard: { width: '48%', backgroundColor: '#fff', padding: 14, borderRadius: 10, borderWidth: 1, borderColor: '#e5e5ea', marginBottom: 10 },
-  metricLabel: { fontSize: 12, color: '#6c757d', flex: 1 },
+  metricCard: { width: '48%', backgroundColor: '#111827', padding: 14, borderRadius: 14, borderWidth: 1.5, borderColor: '#1f2937', marginBottom: 10 },
+  metricLabel: { fontSize: 12, color: '#9ca3af', flex: 1, fontWeight: '600' },
   metricValue: { fontSize: 18, fontWeight: 'bold', marginTop: 4 },
   daysScroll: { flexDirection: 'row', marginVertical: 8 },
-  dayBox: { width: 42, height: 46, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', borderRadius: 8, borderWidth: 1, borderColor: '#e5e5ea', marginRight: 6 },
-  selectedDayBox: { backgroundColor: '#0066cc', borderColor: '#0066cc' },
-  hasEventBox: { borderColor: '#ef5350', borderWidth: 2 },
-  dayText: { fontSize: 14, fontWeight: 'bold', color: '#333' },
-  selectedDayText: { color: '#fff' },
-  dotIndicator: { fontSize: 16, color: '#ef5350', fontWeight: 'bold', marginTop: -4 },
+  dayBox: { width: 44, height: 48, backgroundColor: '#111827', justifyContent: 'center', alignItems: 'center', borderRadius: 10, borderWidth: 1.5, borderColor: '#1f2937', marginRight: 6 },
+  selectedDayBox: { backgroundColor: '#00ffcc', borderColor: '#00ffcc' },
+  hasEventBox: { borderColor: '#ff0055', borderWidth: 2 },
+  dayText: { fontSize: 14, fontWeight: 'bold', color: '#d1d5db' },
+  selectedDayText: { color: '#0b0f19' },
+  dotIndicator: { fontSize: 16, color: '#ff0055', fontWeight: 'bold', marginTop: -4 },
   selectedDayHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, marginBottom: 10 },
-  smallAddBtn: { backgroundColor: '#e0f2fe', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6 },
-  smallAddText: { color: '#0369a1', fontWeight: 'bold', fontSize: 12 }
+  smallAddBtn: { backgroundColor: '#1f2937', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#374151' },
+  smallAddText: { color: '#00ffcc', fontWeight: 'bold', fontSize: 12 }
 });
