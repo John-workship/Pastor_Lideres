@@ -106,7 +106,11 @@ export default function App() {
       const { data: sedesData } = await supabase.from('sedes').select('*');
       if (sedesData && sedesData.length > 0) {
         setSedesList(sedesData);
-        setSelectedSede(prev => sedesData.find(s => s.id === prev?.id) || sedesData[0]);
+        // Mantener la sede seleccionada o poner la primera
+        setSelectedSede(prev => {
+          const match = sedesData.find(s => String(s.id) === String(prev?.id));
+          return match || sedesData[0];
+        });
       }
 
       const { data: comitesData } = await supabase.from('comites').select('*');
@@ -130,7 +134,7 @@ export default function App() {
     fetchData();
   }, []);
 
-  // Guardar Sede
+  // Guardar / Modificar Sede
   const handleSaveSede = async () => {
     const finalName = newSedeName.trim() || 'Nueva Sede';
     let finalUrl = newSedeChannelUrl.trim();
@@ -143,18 +147,19 @@ export default function App() {
       finalUrl = `https://www.youtube.com/embed/${videoId}`;
     }
 
+    const currentId = editingId || String(Date.now());
     const newSedeObj = {
-      id: editingId || Date.now().toString(),
+      id: currentId,
       nombre: finalName,
       url: finalUrl,
       isLive: newSedeIsLive
     };
 
     if (editingId) {
-      setSedesList(sedesList.map(s => s.id === editingId ? newSedeObj : s));
-      await supabase.from('sedes').update({ nombre: finalName, url: finalUrl, isLive: newSedeIsLive }).eq('id', editingId);
+      setSedesList(prev => prev.map(s => String(s.id) === String(editingId) ? newSedeObj : s));
+      await supabase.from('sedes').upsert([newSedeObj]);
     } else {
-      setSedesList([...sedesList, newSedeObj]);
+      setSedesList(prev => [...prev, newSedeObj]);
       await supabase.from('sedes').insert([newSedeObj]);
     }
 
@@ -164,13 +169,16 @@ export default function App() {
     setNewSedeIsLive(false);
     setEditingId(null);
     setShowAddForm(false);
+
+    // Refrescar para asegurar sincronía exacta con Supabase
+    fetchData();
   };
 
   const handleDeleteSede = async (idToDelete) => {
     if (sedesList.length <= 1) return;
-    const updated = sedesList.filter(s => s.id !== idToDelete);
+    const updated = sedesList.filter(s => String(s.id) !== String(idToDelete));
     setSedesList(updated);
-    if (selectedSede?.id === idToDelete) setSelectedSede(updated[0]);
+    if (String(selectedSede?.id) === String(idToDelete)) setSelectedSede(updated[0]);
     await supabase.from('sedes').delete().eq('id', idToDelete);
   };
 
@@ -351,8 +359,8 @@ export default function App() {
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
                 {sedesList.map((item) => (
                   <View key={item.id} style={styles.sedeChipWrapper}>
-                    <TouchableOpacity style={[styles.sedeChip, selectedSede?.id === item.id && styles.activeSedeChip]} onPress={() => setSelectedSede(item)}>
-                      <Text style={[styles.sedeChipText, selectedSede?.id === item.id && styles.activeSedeChipText]}>
+                    <TouchableOpacity style={[styles.sedeChip, String(selectedSede?.id) === String(item.id) && styles.activeSedeChip]} onPress={() => setSelectedSede(item)}>
+                      <Text style={[styles.sedeChipText, String(selectedSede?.id) === String(item.id) && styles.activeSedeChipText]}>
                         🏛️ {item.nombre} {item.isLive ? '🔴' : ''}
                       </Text>
                     </TouchableOpacity>
