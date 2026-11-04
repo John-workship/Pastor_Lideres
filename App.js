@@ -103,12 +103,14 @@ export default function App() {
   const fetchData = async () => {
     setRefreshing(true);
     try {
-      const { data: sedesData } = await supabase.from('sedes').select('*');
-      if (sedesData && sedesData.length > 0) {
-        setSedesList(sedesData);
+      const { data: sedesData, error } = await supabase.from('sedes').select('*');
+      if (!error && sedesData && sedesData.length > 0) {
+        // Asegurar que los IDs se traten consistentemente como texto
+        const formattedSedes = sedesData.map(s => ({ ...s, id: String(s.id) }));
+        setSedesList(formattedSedes);
         setSelectedSede(prev => {
-          const match = sedesData.find(s => String(s.id) === String(prev?.id));
-          return match || sedesData[0];
+          const match = formattedSedes.find(s => s.id === String(prev?.id));
+          return match || formattedSedes[0];
         });
       }
 
@@ -133,7 +135,7 @@ export default function App() {
     fetchData();
   }, []);
 
-  // Guardar / Modificar Sede con actualización directa garantizada en Supabase
+  // Guardar / Modificar Sede con persistencia robusta
   const handleSaveSede = async () => {
     const finalName = newSedeName.trim() || 'Nueva Sede';
     let finalUrl = newSedeChannelUrl.trim();
@@ -147,23 +149,26 @@ export default function App() {
     }
 
     if (editingId) {
+      const targetId = String(editingId);
       const updatedData = {
         nombre: finalName,
         url: finalUrl,
         isLive: newSedeIsLive
       };
 
+      // Forzar actualización exacta en Supabase
       const { error } = await supabase
         .from('sedes')
         .update(updatedData)
-        .eq('id', editingId);
+        .eq('id', targetId);
 
       if (error) {
-        console.log('Error al actualizar en Supabase:', error);
+        console.log('Error actualizando en Supabase:', error);
       }
 
-      setSedesList(prev => prev.map(s => String(s.id) === String(editingId) ? { ...s, ...updatedData } : s));
-      setSelectedSede(prev => String(prev.id) === String(editingId) ? { ...prev, ...updatedData } : prev);
+      // Actualizar estado local
+      setSedesList(prev => prev.map(s => String(s.id) === targetId ? { ...s, ...updatedData } : s));
+      setSelectedSede(prev => String(prev?.id) === targetId ? { ...prev, ...updatedData } : prev);
     } else {
       const newSedeObj = {
         id: String(Date.now()),
@@ -174,7 +179,7 @@ export default function App() {
 
       const { error } = await supabase.from('sedes').insert([newSedeObj]);
       if (error) {
-        console.log('Error al insertar en Supabase:', error);
+        console.log('Error insertando en Supabase:', error);
       }
 
       setSedesList(prev => [...prev, newSedeObj]);
@@ -190,10 +195,11 @@ export default function App() {
 
   const handleDeleteSede = async (idToDelete) => {
     if (sedesList.length <= 1) return;
-    const updated = sedesList.filter(s => String(s.id) !== String(idToDelete));
+    const targetId = String(idToDelete);
+    const updated = sedesList.filter(s => String(s.id) !== targetId);
     setSedesList(updated);
-    if (String(selectedSede?.id) === String(idToDelete)) setSelectedSede(updated[0]);
-    await supabase.from('sedes').delete().eq('id', idToDelete);
+    if (String(selectedSede?.id) === targetId) setSelectedSede(updated[0]);
+    await supabase.from('sedes').delete().eq('id', targetId);
   };
 
   // Guardar Oración
