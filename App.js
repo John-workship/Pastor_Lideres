@@ -40,9 +40,8 @@ export default function App() {
     tesorero: '3333'
   });
 
-  const [activeTab, setActiveTab] = useState('live');
+  const [activeTab, setActiveTab] = useState('home'); // 'home' es la nueva pantalla de inicio por rol
   const [refreshing, setRefreshing] = useState(false);
-  const [showDropdown, setShowDropdown] = useState(false);
   const [isProjectorMode, setIsProjectorMode] = useState(false);
   
   const [screenData, setScreenData] = useState(Dimensions.get('window'));
@@ -55,41 +54,43 @@ export default function App() {
 
   const isDesktop = screenData.width >= 768;
 
-  const getTabsList = () => {
+  // Definición de los accesos permitidos y sus tarjetas para el Dashboard de inicio
+  const getRoleDashboardItems = () => {
     if (currentRole === 'general') {
       return [
-        { key: 'live', label: '📺 Transmisión' },
-        { key: 'prayers', label: '🙏 Oración' },
-        { key: 'comites', label: '👥 Comités' }
+        { key: 'live', title: 'Transmisión en Vivo', subtitle: 'Sigue el culto y la palabra en directo', icon: '📺', color: '#00ffcc' },
+        { key: 'prayers', title: 'Red de Oración', subtitle: 'Publica y únete a peticiones de la hermandad', icon: '🙏', color: '#34d399' },
+        { key: 'comites', title: 'Comités de Trabajo', subtitle: 'Conoce los líderes y secretarios de área', icon: '👥', color: '#fbbf24' }
       ];
     }
     if (currentRole === 'tesorero') {
       return [
-        { key: 'finance', label: '💰 Tesorería' },
-        { key: 'live', label: '📺 Transmisión' },
-        { key: 'comites', label: '👥 Comités' },
-        { key: 'services', label: '📋 Cultos' }
+        { key: 'finance', title: 'Tesorería y Fondos', subtitle: 'Control de diezmos, ofrendas y finanzas', icon: '💰', color: '#00ffcc' },
+        { key: 'live', title: 'Transmisión en Vivo', subtitle: 'Visualiza la señal del culto actual', icon: '📺', color: '#34d399' },
+        { key: 'comites', title: 'Comités de Trabajo', subtitle: 'Listado de comités de la iglesia', icon: '👥', color: '#fbbf24' },
+        { key: 'services', title: 'Calendario de Cultos', subtitle: 'Consulta los eventos programados', icon: '📋', color: '#a78bfa' }
       ];
     }
     if (currentRole === 'secretario') {
       return [
-        { key: 'live', label: '📺 Transmisión' },
-        { key: 'comites', label: '👥 Comités' },
-        { key: 'services', label: '📋 Cultos' },
-        { key: 'finance', label: '💰 Tesorería' }
+        { key: 'live', title: 'Transmisión en Vivo', subtitle: 'Monitorea la señal del culto', icon: '📺', color: '#00ffcc' },
+        { key: 'comites', title: 'Comités de Trabajo', subtitle: 'Gestiona líderes y secretarios de comités', icon: '👥', color: '#34d399' },
+        { key: 'services', title: 'Calendario de Cultos', subtitle: 'Programa y organiza los eventos y cultos', icon: '📋', color: '#fbbf24' },
+        { key: 'finance', title: 'Tesorería (Visualización)', subtitle: 'Consulta los fondos y reportes financieros', icon: '💰', color: '#a78bfa' }
       ];
     }
+    // Pastor (Acceso total)
     return [
-      { key: 'live', label: '📺 Transmisión' },
-      { key: 'prayers', label: '🙏 Oración' },
-      { key: 'comites', label: '👥 Comités' },
-      { key: 'finance', label: '💰 Tesorería' },
-      { key: 'services', label: '📋 Cultos' },
-      { key: 'users', label: '🔐 Accesos' }
+      { key: 'live', title: 'Transmisión en Vivo', subtitle: 'Administra sedes y el reproductor en directo', icon: '📺', color: '#00ffcc' },
+      { key: 'prayers', title: 'Red de Oración', subtitle: 'Gestiona peticiones y marca respondidas', icon: '🙏', color: '#34d399' },
+      { key: 'comites', title: 'Comités de Trabajo', subtitle: 'Organiza líderes, comités y secretarios', icon: '👥', color: '#fbbf24' },
+      { key: 'finance', title: 'Tesorería y Fondos', subtitle: 'Administra fondos, ofrendas y cuentas', icon: '💰', color: '#a78bfa' },
+      { key: 'services', title: 'Calendario de Cultos', subtitle: 'Planifica la agenda de servicios y eventos', icon: '📋', color: '#f472b6' },
+      { key: 'users', title: 'Gestión de Accesos', subtitle: 'Modifica las contraseñas administrativas', icon: '🔐', color: '#60a5fa' }
     ];
   };
 
-  const tabsList = getTabsList();
+  const dashboardItems = getRoleDashboardItems();
 
   const [sedesList, setSedesList] = useState([
     { id: '1', nombre: 'IPUC Mosquera Tercera', url: '', isLive: false }
@@ -175,7 +176,7 @@ export default function App() {
   const handleAdminLogin = () => {
     if (passwordInput === accessKeys[targetRoleToLogin]) {
       setCurrentRole(targetRoleToLogin);
-      setActiveTab(targetRoleToLogin === 'tesorero' ? 'finance' : 'live');
+      setActiveTab('home'); // Ir directo al inicio de su rol
       setTargetRoleToLogin(null);
       setPasswordInput('');
     } else {
@@ -185,7 +186,7 @@ export default function App() {
 
   const handleGeneralLogin = () => {
     setCurrentRole('general');
-    setActiveTab('live');
+    setActiveTab('home');
     setShowGeneralModal(false);
   };
 
@@ -239,7 +240,7 @@ export default function App() {
       name: authorName, 
       request: newPrayerRequest.trim(),
       status: 'active',
-      count: 0 // Comienza en 0 para que no aparezca con reacciones automáticas
+      count: 0
     };
 
     setPrayers(prev => [newObj, ...prev]);
@@ -346,7 +347,6 @@ export default function App() {
 
   const novDays = Array.from({ length: 30 }, (_, i) => `2026-11-${String(i + 1).padStart(2, '0')}`);
   const decDays = Array.from({ length: 31 }, (_, i) => `2026-12-${String(i + 1).padStart(2, '0')}`);
-  const activeTabObj = tabsList.find(t => t.key === activeTab);
 
   if (!currentRole) {
     return (
@@ -475,30 +475,16 @@ export default function App() {
           <View style={styles.roleSelectorWrapper}>
             <TouchableOpacity style={styles.roleButtonActive} onPress={() => setCurrentRole(null)}>
               <Text style={styles.roleButtonText}>
-                👤 {currentRole === 'pastor' ? 'Pastor' : currentRole === 'secretario' ? 'Secretario(a)' : currentRole === 'tesorero' ? 'Tesorero(a)' : (generalUserName ? generalUserName : 'Invitado')} (Cerrar Sesión ⇦)
+                👤 {currentRole === 'pastor' ? 'Pastor' : currentRole === 'secretario' ? 'Secretario(a)' : currentRole === 'tesorero' ? 'Tesorero(a)' : (generalUserName ? generalUserName : 'Invitado')} (Salir ⇦)
               </Text>
             </TouchableOpacity>
           </View>
 
-          {isDesktop ? (
-            <View style={styles.desktopTabRow}>
-              {tabsList.map(t => (
-                <TouchableOpacity key={t.key} style={[styles.tabButton, activeTab === t.key && styles.activeTab]} onPress={() => setActiveTab(t.key)}>
-                  <Text style={[styles.tabText, activeTab === t.key && styles.activeTabText]}>
-                    {t.key === 'live' && selectedSede?.isLive ? '📺 Transmisión 🔴' : t.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          ) : (
-            <View style={styles.mobileDropdownWrapper}>
-              <TouchableOpacity style={styles.dropdownSelector} onPress={() => setShowDropdown(!showDropdown)}>
-                <Text style={styles.dropdownSelectorText}>
-                  {activeTab === 'live' && selectedSede?.isLive ? '📺 Transmisión 🔴' : (activeTabObj?.label || 'Seleccionar Módulo')}
-                </Text>
-                <Text style={styles.dropdownArrow}>{showDropdown ? '▲' : '▼'}</Text>
-              </TouchableOpacity>
-            </View>
+          {/* Botón para regresar al Inicio / Dashboard principal */}
+          {activeTab !== 'home' && (
+            <TouchableOpacity style={styles.homeNavBtn} onPress={() => setActiveTab('home')}>
+              <Text style={styles.homeNavBtnText}>🏠 Inicio</Text>
+            </TouchableOpacity>
           )}
 
           <TouchableOpacity style={styles.refreshBtn} onPress={fetchData} disabled={refreshing}>
@@ -507,25 +493,42 @@ export default function App() {
         </View>
       )}
 
-      {!isDesktop && showDropdown && !isProjectorMode && (
-        <View style={styles.dropdownMenu}>
-          {tabsList.map(t => (
-            <TouchableOpacity 
-              key={t.key} 
-              style={[styles.dropdownItem, activeTab === t.key && styles.activeDropdownItem]}
-              onPress={() => { setActiveTab(t.key); setShowDropdown(false); }}
-            >
-              <Text style={[styles.dropdownItemText, activeTab === t.key && styles.activeDropdownItemText]}>
-                {t.key === 'live' && selectedSede?.isLive ? '📺 Transmisión 🔴' : t.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
-
       <View style={[styles.mainWrapper, isDesktop && styles.desktopWrapper]}>
         <View style={{ flex: 1, width: '100%' }}>
+
+          {/* ========================================================= */}
+          {/* PANTALLA DE INICIO / DASHBOARD PRINCIPAL POR ROL          */}
+          {/* ========================================================= */}
+          {activeTab === 'home' && (
+            <ScrollView style={styles.content}>
+              <View style={styles.dashboardWelcomeCard}>
+                <Text style={styles.dashboardWelcomeEmoji}>✨</Text>
+                <Text style={styles.dashboardWelcomeTitle}>
+                  Bienvenido, {currentRole === 'pastor' ? 'Pastor' : currentRole === 'secretario' ? 'Secretario(a)' : currentRole === 'tesorero' ? 'Tesorero(a)' : (generalUserName || 'Hermanos')}
+                </Text>
+                <Text style={styles.dashboardWelcomeSub}>Selecciona una opción para acceder a sus funciones:</Text>
+              </View>
+
+              <View style={[styles.dashboardGrid, isDesktop && styles.desktopDashboardGrid]}>
+                {dashboardItems.map((item) => (
+                  <TouchableOpacity 
+                    key={item.key} 
+                    style={[styles.dashboardCard, isDesktop && { width: '31%' }]} 
+                    onPress={() => setActiveTab(item.key)}
+                  >
+                    <Text style={styles.dashboardCardIcon}>{item.icon}</Text>
+                    <Text style={[styles.dashboardCardTitle, { color: item.color }]}>{item.title}</Text>
+                    <Text style={styles.dashboardCardSub}>{item.subtitle}</Text>
+                    <Text style={styles.dashboardCardArrow}>Entrar ➔</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+          )}
           
+          {/* ========================================================= */}
+          {/* MÓDULO: TRANSMISIÓN EN VIVO                               */}
+          {/* ========================================================= */}
           {activeTab === 'live' && (
             <ScrollView style={[styles.content, isProjectorMode && { padding: 0, backgroundColor: '#000' }]}>
               
@@ -642,6 +645,9 @@ export default function App() {
             </ScrollView>
           )}
 
+          {/* ========================================================= */}
+          {/* MÓDULO: RED DE ORACIÓN                                    */}
+          {/* ========================================================= */}
           {activeTab === 'prayers' && currentRole !== 'tesorero' && currentRole !== 'secretario' && (
             <ScrollView style={styles.content}>
               <Text style={styles.sectionTitle}>🙏 Red de Oración Congregacional</Text>
@@ -698,6 +704,9 @@ export default function App() {
             </ScrollView>
           )}
 
+          {/* ========================================================= */}
+          {/* MÓDULO: COMITÉS DE TRABAJO                                */}
+          {/* ========================================================= */}
           {activeTab === 'comites' && (
             <ScrollView style={styles.content}>
               <Text style={styles.sectionTitle}>👥 Comités de Trabajo</Text>
@@ -761,6 +770,9 @@ export default function App() {
             </ScrollView>
           )}
 
+          {/* ========================================================= */}
+          {/* MÓDULO: TESORERÍA                                         */}
+          {/* ========================================================= */}
           {activeTab === 'finance' && currentRole !== 'general' && (
             <ScrollView style={styles.content}>
               <Text style={styles.centeredSectionTitle}>Diezmos - Ofrendas y Donaciones</Text>
@@ -806,6 +818,9 @@ export default function App() {
             </ScrollView>
           )}
 
+          {/* ========================================================= */}
+          {/* MÓDULO: CALENDARIO DE CULTOS                              */}
+          {/* ========================================================= */}
           {activeTab === 'services' && currentRole !== 'general' && (
             <ScrollView style={styles.content}>
               <Text style={styles.sectionTitle}>📅 Calendario de Cultos</Text>
@@ -900,6 +915,9 @@ export default function App() {
             </ScrollView>
           )}
 
+          {/* ========================================================= */}
+          {/* MÓDULO: GESTIÓN DE ACCESOS (SOLO PASTOR)                  */}
+          {/* ========================================================= */}
           {activeTab === 'users' && currentRole === 'pastor' && (
             <ScrollView style={styles.content}>
               <Text style={styles.sectionTitle}>🔐 Gestión de Accesos y Claves</Text>
@@ -933,6 +951,7 @@ export default function App() {
               </View>
             </ScrollView>
           )}
+
         </View>
       </View>
     </SafeAreaView>
@@ -963,28 +982,33 @@ const styles = StyleSheet.create({
   modalSub: { fontSize: 12, color: '#9ca3af', marginBottom: 14 },
 
   topBarContainer: { flexDirection: 'row', backgroundColor: '#111827', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, height: 56, borderBottomWidth: 1, borderColor: '#1f2937', zIndex: 10 },
-  roleSelectorWrapper: { marginRight: 10 },
-  roleButtonActive: { backgroundColor: '#1f2937', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#00ffcc' },
-  roleButtonText: { color: '#00ffcc', fontSize: 12, fontWeight: 'bold' },
-  desktopTabRow: { flexDirection: 'row', flex: 1 },
-  tabButton: { paddingHorizontal: 16, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
-  activeTab: { borderBottomWidth: 3, borderBottomColor: '#00ffcc' },
-  tabText: { fontSize: 14, color: '#9ca3af', fontWeight: '600' },
-  activeTabText: { color: '#00ffcc', fontWeight: 'bold' },
-  mobileDropdownWrapper: { flex: 1, marginRight: 10 },
-  dropdownSelector: { backgroundColor: '#1f2937', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: '#374151' },
-  dropdownSelectorText: { color: '#00ffcc', fontWeight: 'bold', fontSize: 14 },
-  dropdownArrow: { color: '#00ffcc', fontSize: 12, marginLeft: 8 },
-  dropdownMenu: { backgroundColor: '#111827', borderBottomWidth: 2, borderColor: '#00ffcc', paddingVertical: 4, position: 'absolute', top: 56, left: 0, right: 0, zIndex: 99 },
-  dropdownItem: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderColor: '#1f2937' },
-  activeDropdownItem: { backgroundColor: '#1f2937' },
-  dropdownItemText: { color: '#9ca3af', fontSize: 14, fontWeight: '600' },
-  activeDropdownItemText: { color: '#00ffcc', fontWeight: 'bold' },
-  refreshBtn: { backgroundColor: '#1f2937', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#374151' },
-  refreshBtnText: { color: '#00ffcc', fontSize: 14, fontWeight: 'bold' },
+  roleSelectorWrapper: { marginRight: 6 },
+  roleButtonActive: { backgroundColor: '#1f2937', paddingHorizontal: 8, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#00ffcc' },
+  roleButtonText: { color: '#00ffcc', fontSize: 11, fontWeight: 'bold' },
+  
+  homeNavBtn: { backgroundColor: '#1f2937', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#374151', marginRight: 6 },
+  homeNavBtnText: { color: '#00ffcc', fontSize: 12, fontWeight: 'bold' },
+
+  refreshBtn: { backgroundColor: '#1f2937', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#374151' },
+  refreshBtnText: { color: '#00ffcc', fontSize: 13, fontWeight: 'bold' },
+
   mainWrapper: { flex: 1 },
   desktopWrapper: { maxWidth: 1024, alignSelf: 'center', width: '100%' },
   content: { flex: 1, padding: 16 },
+
+  // Estilos del Dashboard de Inicio
+  dashboardWelcomeCard: { backgroundColor: '#111827', padding: 20, borderRadius: 16, marginBottom: 16, borderWidth: 1.5, borderColor: '#1f2937', alignItems: 'center' },
+  dashboardWelcomeEmoji: { fontSize: 32, marginBottom: 6 },
+  dashboardWelcomeTitle: { fontSize: 18, fontWeight: 'bold', color: '#ffffff', textAlign: 'center', marginBottom: 4 },
+  dashboardWelcomeSub: { fontSize: 12, color: '#9ca3af', textAlign: 'center' },
+  dashboardGrid: { gap: 12 },
+  desktopDashboardGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  dashboardCard: { backgroundColor: '#111827', padding: 18, borderRadius: 16, marginBottom: 12, borderWidth: 1.5, borderColor: '#1f2937' },
+  dashboardCardIcon: { fontSize: 26, marginBottom: 8 },
+  dashboardCardTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 4 },
+  dashboardCardSub: { fontSize: 12, color: '#9ca3af', marginBottom: 12, lineHeight: 16 },
+  dashboardCardArrow: { fontSize: 12, fontWeight: 'bold', color: '#00ffcc' },
+
   sedesHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
   labelHeader: { fontSize: 12, fontWeight: 'bold', color: '#9ca3af' },
   editSedeText: { fontSize: 12, fontWeight: 'bold', color: '#00ffcc' },
