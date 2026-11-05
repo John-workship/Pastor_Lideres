@@ -140,10 +140,10 @@ export default function App() {
   const [newFinanceLabel, setNewFinanceLabel] = useState('');
   const [newFinanceAmount, setNewFinanceAmount] = useState('');
 
-  // Gestión dinámica de los dos meses visibles (Mes actual y Mes siguiente)
+  // Meses visibles
   const [activeMonths, setActiveMonths] = useState([
-    { id: '2026-11', name: 'Noviembre 2026' },
-    { id: '2026-12', name: 'Diciembre 2026' }
+    { id: '2026-11', name: 'NOVIEMBRE 2026' },
+    { id: '2026-12', name: 'DICIEMBRE 2026' }
   ]);
   const [currentMonth, setCurrentMonth] = useState('2026-11');
   const [selectedDay, setSelectedDay] = useState('2026-11-05');
@@ -156,16 +156,12 @@ export default function App() {
   const [newEventTime, setNewEventTime] = useState('');
   const [newEventDetails, setNewEventDetails] = useState('');
 
-  // Función automática para verificar el cambio de mes, borrar el historial anterior y crear el mes siguiente
   const checkAndRotateMonths = async () => {
     try {
       const { data: eventsData } = await supabase.from('events').select('*');
       if (eventsData && eventsData.length > 0) {
-        // Obtenemos los meses únicos presentes en los eventos actuales
         const uniqueMonthsInDb = [...new Set(eventsData.map(e => e.date.substring(0, 7)))].sort();
-
         if (uniqueMonthsInDb.length > 2) {
-          // Si hay más de 2 meses, borramos automáticamente el historial del mes más antiguo
           const oldestMonth = uniqueMonthsInDb[0];
           await supabase.from('events').delete().like('date', `${oldestMonth}%`);
         }
@@ -212,7 +208,6 @@ export default function App() {
       const { data: eventsData } = await supabase.from('events').select('*');
       if (eventsData && eventsData.length > 0) {
         setEventsList(eventsData);
-        // Actualizamos los dos meses visibles basados en los eventos reales o fechas actuales
         const activeDates = [...new Set(eventsData.map(e => e.date.substring(0, 7)))].sort();
         if (activeDates.length >= 2) {
           setActiveMonths([
@@ -231,11 +226,11 @@ export default function App() {
   const formatMonthName = (yearMonthStr) => {
     const [year, month] = yearMonthStr.split('-');
     const monthsNames = {
-      '01': 'Enero', '02': 'Febrero', '03': 'Marzo', '04': 'Abril',
-      '05': 'Mayo', '06': 'Junio', '07': 'Julio', '08': 'Agosto',
-      '09': 'Septiembre', '10': 'Octubre', '11': 'Noviembre', '12': 'Diciembre'
+      '01': 'ENERO', '02': 'FEBRERO', '03': 'MARZO', '04': 'ABRIL',
+      '05': 'MAYO', '06': 'JUNIO', '07': 'JULIO', '08': 'AGOSTO',
+      '09': 'SEPTIEMBRE', '10': 'OCTUBRE', '11': 'NOVIEMBRE', '12': 'DICIEMBRE'
     };
-    return `${monthsNames[month] || 'Mes'} ${year}`;
+    return `${monthsNames[month] || 'MES'} ${year}`;
   };
 
   useEffect(() => {
@@ -481,14 +476,40 @@ export default function App() {
     await supabase.from('events').delete().eq('id', String(id));
   };
 
-  // Generadores dinámicos de días basados en el mes activo seleccionado
-  const getDaysInMonth = (yearMonthStr) => {
+  // Construcción del calendario real alineado por día de la semana (Lunes a Domingo o Domingo a Sábado)
+  const getCalendarMatrix = (yearMonthStr) => {
     const [year, month] = yearMonthStr.split('-').map(Number);
+    const firstDayIndex = new Date(year, month - 1, 1).getDay(); // 0 = Domingo, 1 = Lunes...
     const totalDays = new Date(year, month, 0).getDate();
-    return Array.from({ length: totalDays }, (_, i) => `${yearMonthStr}-${String(i + 1).padStart(2, '0')}`);
+
+    // Ajustamos para iniciar en Lunes (Lunes = 0, ..., Domingo = 6)
+    const offset = (firstDayIndex + 6) % 7; 
+
+    let matrix = [];
+    let currentRow = Array(7).fill(null);
+
+    // Rellenar espacios vacíos antes del día 1
+    for (let i = 0; i < offset; i++) {
+      currentRow[i] = null;
+    }
+
+    // Rellenar días del mes
+    for (let day = 1; day <= totalDays; day++) {
+      const dayStr = String(day).padStart(2, '0');
+      const dateString = `${yearMonthStr}-${dayStr}`;
+      
+      const colIndex = (offset + day - 1) % 7;
+      currentRow[colIndex] = { dayNumber: day, dateString };
+
+      if (colIndex === 6 || day === totalDays) {
+        matrix.push(currentRow);
+        currentRow = Array(7).fill(null);
+      }
+    }
+    return matrix;
   };
 
-  const currentDaysList = getDaysInMonth(currentMonth);
+  const calendarMatrix = getCalendarMatrix(currentMonth);
 
   const userDisplayName = generalFirstName && generalLastName 
     ? `${generalFirstName} ${generalLastName}` 
@@ -1006,7 +1027,7 @@ export default function App() {
             <ScrollView style={styles.content}>
               <Text style={styles.sectionTitle}>📅 Calendario de Cultos</Text>
 
-              {/* Pestañas dinámicas: Siempre muestra exactamente 2 meses visibles (Mes en curso y Mes siguiente) */}
+              {/* Pestañas de meses */}
               <View style={styles.monthSelectorRow}>
                 {activeMonths.map((m) => (
                   <TouchableOpacity 
@@ -1019,38 +1040,64 @@ export default function App() {
                 ))}
               </View>
 
-              {/* Vista Cuadrícula de Calendario Compacto */}
-              <View style={styles.calendarGrid}>
-                {currentDaysList.map((dayStr) => {
-                  const dayEvents = eventsList.filter(e => e.date === dayStr);
-                  const hasEvent = dayEvents.length > 0;
-                  const dayNumber = dayStr.split('-')[2];
+              {/* Calendario Estilo Cuadrícula Mensual */}
+              <View style={styles.calendarContainerCard}>
+                {/* Cabecera de días de la semana */}
+                <View style={styles.weekDaysHeaderRow}>
+                  <Text style={styles.weekDayLabel}>L</Text>
+                  <Text style={styles.weekDayLabel}>M</Text>
+                  <Text style={styles.weekDayLabel}>M</Text>
+                  <Text style={styles.weekDayLabel}>J</Text>
+                  <Text style={styles.weekDayLabel}>V</Text>
+                  <Text style={styles.weekDayLabel}>S</Text>
+                  <Text style={styles.weekDayLabel}>D</Text>
+                </View>
 
-                  return (
-                    <TouchableOpacity 
-                      key={dayStr} 
-                      style={[styles.calendarCell, hasEvent && styles.cellWithEvent]} 
-                      onPress={() => {
-                        setSelectedDay(dayStr);
-                        setShowDayModal(true);
-                      }}
-                    >
-                      <Text style={styles.cellDayNumber}>{dayNumber}</Text>
-                      {hasEvent && (
-                        <View style={styles.cellEventIndicator}>
-                          <Text style={styles.cellEventIndicatorText}>{dayEvents.length}</Text>
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
+                {/* Filas de la matriz del mes */}
+                {calendarMatrix.map((weekRow, rowIndex) => (
+                  <View key={rowIndex} style={styles.calendarWeekRow}>
+                    {weekRow.map((dayObj, colIndex) => {
+                      if (!dayObj) {
+                        return <View key={`empty-${colIndex}`} style={styles.calendarCellEmpty} />;
+                      }
+
+                      const dayEvents = eventsList.filter(e => e.date === dayObj.dateString);
+                      const hasEvent = dayEvents.length > 0;
+                      const isSelected = selectedDay === dayObj.dateString;
+
+                      return (
+                        <TouchableOpacity 
+                          key={dayObj.dateString} 
+                          style={[
+                            styles.calendarCell, 
+                            hasEvent && styles.cellWithEvent,
+                            isSelected && styles.cellSelected
+                          ]} 
+                          onPress={() => {
+                            setSelectedDay(dayObj.dateString);
+                            setShowDayModal(true);
+                          }}
+                        >
+                          <Text style={[styles.cellDayNumber, isSelected && styles.cellDayNumberSelected]}>
+                            {dayObj.dayNumber}
+                          </Text>
+                          {hasEvent && (
+                            <View style={styles.cellEventIndicator}>
+                              <Text style={styles.cellEventIndicatorText}>{dayEvents.length}</Text>
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                ))}
               </View>
 
-              <Text style={{ color: '#9ca3af', fontSize: 11, textAlign: 'center', marginTop: 10 }}>
-                💡 El historial anterior se limpia automáticamente al iniciar un nuevo mes (siempre visible: mes actual y siguiente).
+              <Text style={{ color: '#9ca3af', fontSize: 11, textAlign: 'center', marginTop: 12 }}>
+                💡 Toca cualquier día del calendario para ver o programar sus eventos.
               </Text>
 
-              {/* Modal Desplegable al presionar un día del calendario */}
+              {/* Modal Desplegable del Día Seleccionado */}
               <Modal visible={showDayModal} transparent animationType="slide">
                 <View style={styles.modalOverlay}>
                   <View style={[styles.modalContent, { maxHeight: '80%' }]}>
@@ -1357,12 +1404,19 @@ const styles = StyleSheet.create({
   monthTabText: { color: '#d1d5db', fontWeight: 'bold', fontSize: 13 },
   activeMonthTabText: { color: '#0b0f19' },
 
-  calendarGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' },
-  calendarCell: { width: '13%', aspectRatio: 1, backgroundColor: '#111827', justifyContent: 'center', alignItems: 'center', borderRadius: 8, borderWidth: 1, borderColor: '#374151' },
+  // Estilos avanzados para el nuevo Calendario en Cuadrícula Mensual
+  calendarContainerCard: { backgroundColor: '#111827', borderRadius: 16, padding: 12, borderWidth: 1.5, borderColor: '#1f2937' },
+  weekDaysHeaderRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 8, paddingBottom: 6, borderBottomWidth: 1, borderColor: '#374151' },
+  weekDayLabel: { color: '#9ca3af', fontSize: 12, fontWeight: 'bold', width: '14%', textAlign: 'center' },
+  calendarWeekRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 6 },
+  calendarCellEmpty: { width: '14%', aspectRatio: 1 },
+  calendarCell: { width: '14%', aspectRatio: 1, backgroundColor: '#1f2937', justifyContent: 'center', alignItems: 'center', borderRadius: 8, borderWidth: 1, borderColor: '#374151' },
   cellWithEvent: { borderColor: '#00ffcc', backgroundColor: '#0b1f1a' },
+  cellSelected: { backgroundColor: '#00ffcc', borderColor: '#00ffcc' },
   cellDayNumber: { color: '#ffffff', fontSize: 13, fontWeight: 'bold' },
-  cellEventIndicator: { position: 'absolute', bottom: 2, right: 2, backgroundColor: '#00ffcc', width: 14, height: 14, borderRadius: 7, justifyContent: 'center', alignItems: 'center' },
-  cellEventIndicatorText: { color: '#0b0f19', fontSize: 9, fontWeight: 'bold' },
+  cellDayNumberSelected: { color: '#0b0f19' },
+  cellEventIndicator: { position: 'absolute', bottom: 2, right: 2, backgroundColor: '#ff0055', width: 14, height: 14, borderRadius: 7, justifyContent: 'center', alignItems: 'center' },
+  cellEventIndicatorText: { color: '#ffffff', fontSize: 9, fontWeight: 'bold' },
 
   activePrayerBadge: { backgroundColor: '#374151', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
   activePrayerBadgeText: { color: '#fbbf24', fontSize: 10, fontWeight: 'bold' },
