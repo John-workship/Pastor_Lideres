@@ -140,8 +140,12 @@ export default function App() {
   const [newFinanceLabel, setNewFinanceLabel] = useState('');
   const [newFinanceAmount, setNewFinanceAmount] = useState('');
 
-  // Estados para el calendario de mes en cuadrícula
-  const [currentMonth, setCurrentMonth] = useState('2026-11'); // '2026-11' o '2026-12'
+  // Gestión dinámica de los dos meses visibles (Mes actual y Mes siguiente)
+  const [activeMonths, setActiveMonths] = useState([
+    { id: '2026-11', name: 'Noviembre 2026' },
+    { id: '2026-12', name: 'Diciembre 2026' }
+  ]);
+  const [currentMonth, setCurrentMonth] = useState('2026-11');
   const [selectedDay, setSelectedDay] = useState('2026-11-05');
   const [showDayModal, setShowDayModal] = useState(false);
 
@@ -152,9 +156,30 @@ export default function App() {
   const [newEventTime, setNewEventTime] = useState('');
   const [newEventDetails, setNewEventDetails] = useState('');
 
+  // Función automática para verificar el cambio de mes, borrar el historial anterior y crear el mes siguiente
+  const checkAndRotateMonths = async () => {
+    try {
+      const { data: eventsData } = await supabase.from('events').select('*');
+      if (eventsData && eventsData.length > 0) {
+        // Obtenemos los meses únicos presentes en los eventos actuales
+        const uniqueMonthsInDb = [...new Set(eventsData.map(e => e.date.substring(0, 7)))].sort();
+
+        if (uniqueMonthsInDb.length > 2) {
+          // Si hay más de 2 meses, borramos automáticamente el historial del mes más antiguo
+          const oldestMonth = uniqueMonthsInDb[0];
+          await supabase.from('events').delete().like('date', `${oldestMonth}%`);
+        }
+      }
+    } catch (err) {
+      console.log('Error al rotar meses en la base de datos:', err);
+    }
+  };
+
   const fetchData = async () => {
     setRefreshing(true);
     try {
+      await checkAndRotateMonths();
+
       const { data: sedesData } = await supabase.from('sedes').select('*');
       if (sedesData && sedesData.length > 0) {
         const formatted = sedesData.map(s => ({ ...s, id: String(s.id) }));
@@ -185,12 +210,32 @@ export default function App() {
       if (financeData && financeData.length > 0) setFinanceList(financeData);
 
       const { data: eventsData } = await supabase.from('events').select('*');
-      if (eventsData && eventsData.length > 0) setEventsList(eventsData);
+      if (eventsData && eventsData.length > 0) {
+        setEventsList(eventsData);
+        // Actualizamos los dos meses visibles basados en los eventos reales o fechas actuales
+        const activeDates = [...new Set(eventsData.map(e => e.date.substring(0, 7)))].sort();
+        if (activeDates.length >= 2) {
+          setActiveMonths([
+            { id: activeDates[0], name: formatMonthName(activeDates[0]) },
+            { id: activeDates[1], name: formatMonthName(activeDates[1]) }
+          ]);
+        }
+      }
 
     } catch (err) {
       console.log('Error de sincronización:', err);
     }
     setRefreshing(false);
+  };
+
+  const formatMonthName = (yearMonthStr) => {
+    const [year, month] = yearMonthStr.split('-');
+    const monthsNames = {
+      '01': 'Enero', '02': 'Febrero', '03': 'Marzo', '04': 'Abril',
+      '05': 'Mayo', '06': 'Junio', '07': 'Julio', '08': 'Agosto',
+      '09': 'Septiembre', '10': 'Octubre', '11': 'Noviembre', '12': 'Diciembre'
+    };
+    return `${monthsNames[month] || 'Mes'} ${year}`;
   };
 
   useEffect(() => {
@@ -436,10 +481,14 @@ export default function App() {
     await supabase.from('events').delete().eq('id', String(id));
   };
 
-  // Generadores de días del mes en formato cuadrícula
-  const novDays = Array.from({ length: 30 }, (_, i) => `2026-11-${String(i + 1).padStart(2, '0')}`);
-  const decDays = Array.from({ length: 31 }, (_, i) => `2026-12-${String(i + 1).padStart(2, '0')}`);
-  const currentDaysList = currentMonth === '2026-11' ? novDays : decDays;
+  // Generadores dinámicos de días basados en el mes activo seleccionado
+  const getDaysInMonth = (yearMonthStr) => {
+    const [year, month] = yearMonthStr.split('-').map(Number);
+    const totalDays = new Date(year, month, 0).getDate();
+    return Array.from({ length: totalDays }, (_, i) => `${yearMonthStr}-${String(i + 1).padStart(2, '0')}`);
+  };
+
+  const currentDaysList = getDaysInMonth(currentMonth);
 
   const userDisplayName = generalFirstName && generalLastName 
     ? `${generalFirstName} ${generalLastName}` 
@@ -957,21 +1006,17 @@ export default function App() {
             <ScrollView style={styles.content}>
               <Text style={styles.sectionTitle}>📅 Calendario de Cultos</Text>
 
-              {/* Pestañas para alternar entre Meses */}
+              {/* Pestañas dinámicas: Siempre muestra exactamente 2 meses visibles (Mes en curso y Mes siguiente) */}
               <View style={styles.monthSelectorRow}>
-                <TouchableOpacity 
-                  style={[styles.monthTabBtn, currentMonth === '2026-11' && styles.activeMonthTab]} 
-                  onPress={() => setCurrentMonth('2026-11')}
-                >
-                  <Text style={[styles.monthTabText, currentMonth === '2026-11' && styles.activeMonthTabText]}>Noviembre 2026</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity 
-                  style={[styles.monthTabBtn, currentMonth === '2026-12' && styles.activeMonthTab]} 
-                  onPress={() => setCurrentMonth('2026-12')}
-                >
-                  <Text style={[styles.monthTabText, currentMonth === '2026-12' && styles.activeMonthTabText]}>Diciembre 2026</Text>
-                </TouchableOpacity>
+                {activeMonths.map((m) => (
+                  <TouchableOpacity 
+                    key={m.id}
+                    style={[styles.monthTabBtn, currentMonth === m.id && styles.activeMonthTab]} 
+                    onPress={() => setCurrentMonth(m.id)}
+                  >
+                    <Text style={[styles.monthTabText, currentMonth === m.id && styles.activeMonthTabText]}>{m.name}</Text>
+                  </TouchableOpacity>
+                ))}
               </View>
 
               {/* Vista Cuadrícula de Calendario Compacto */}
@@ -1002,7 +1047,7 @@ export default function App() {
               </View>
 
               <Text style={{ color: '#9ca3af', fontSize: 11, textAlign: 'center', marginTop: 10 }}>
-                💡 Toca cualquier día en la cuadrícula para ver o agregar sus eventos.
+                💡 El historial anterior se limpia automáticamente al iniciar un nuevo mes (siempre visible: mes actual y siguiente).
               </Text>
 
               {/* Modal Desplegable al presionar un día del calendario */}
@@ -1306,7 +1351,6 @@ const styles = StyleSheet.create({
   metricLabel: { fontSize: 12, color: '#9ca3af', fontWeight: '600' },
   metricValue: { fontSize: 18, fontWeight: 'bold', marginTop: 4 },
   
-  // Estilos para el nuevo Calendario en Cuadrícula
   monthSelectorRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
   monthTabBtn: { flex: 1, backgroundColor: '#1f2937', padding: 10, borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: '#374151' },
   activeMonthTab: { backgroundColor: '#00ffcc', borderColor: '#00ffcc' },
