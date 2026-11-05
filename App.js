@@ -31,11 +31,11 @@ export default function App() {
   const [targetRoleToLogin, setTargetRoleToLogin] = useState(null);
   const [passwordInput, setPasswordInput] = useState('');
   
-  // Claves de acceso genéricas almacenadas en estado (Gestionables por el Pastor)
+  // Nuevas claves genéricas actualizadas
   const [accessKeys, setAccessKeys] = useState({
-    pastor: '1234',
-    secretario: '5678',
-    tesorero: '4321'
+    pastor: '7777',
+    secretario: '5555',
+    tesorero: '3333'
   });
 
   const [activeTab, setActiveTab] = useState('live');
@@ -53,7 +53,6 @@ export default function App() {
 
   const isDesktop = screenData.width >= 768;
 
-  // Pestañas filtradas estrictamente por rol
   const getTabsList = () => {
     if (currentRole === 'general') {
       return [
@@ -78,7 +77,6 @@ export default function App() {
         { key: 'finance', label: '💰 Tesorería' }
       ];
     }
-    // Pastor incluye pestaña de gestión de usuarios/claves
     return [
       { key: 'live', label: '📺 Transmisión' },
       { key: 'prayers', label: '🙏 Oración' },
@@ -91,7 +89,6 @@ export default function App() {
 
   const tabsList = getTabsList();
 
-  // Sedes
   const [sedesList, setSedesList] = useState([
     { id: '1', nombre: 'IPUC Mosquera Tercera', url: '', isLive: false }
   ]);
@@ -102,13 +99,11 @@ export default function App() {
   const [newSedeChannelUrl, setNewSedeChannelUrl] = useState('');
   const [newSedeIsLive, setNewSedeIsLive] = useState(false);
 
-  // Oración
   const [prayers, setPrayers] = useState([]);
   const [newPrayerName, setNewPrayerName] = useState('');
   const [newPrayerRequest, setNewPrayerRequest] = useState('');
   const [myLocalPrayerIds, setMyLocalPrayerIds] = useState([]);
 
-  // Comités
   const [comitesList, setComitesList] = useState([]);
   const [showComiteForm, setShowComiteForm] = useState(false);
   const [editingComiteId, setEditingComiteId] = useState(null);
@@ -116,14 +111,12 @@ export default function App() {
   const [newComiteLider, setNewComiteLider] = useState('');
   const [newComiteSecretario, setNewComiteSecretario] = useState('');
 
-  // Tesorería
   const [financeList, setFinanceList] = useState([]);
   const [showFinanceForm, setShowFinanceForm] = useState(false);
   const [editingFinanceId, setEditingFinanceId] = useState(null);
   const [newFinanceLabel, setNewFinanceLabel] = useState('');
   const [newFinanceAmount, setNewFinanceAmount] = useState('');
 
-  // Calendario
   const [selectedDay, setSelectedDay] = useState('2026-11-05');
   const [eventsList, setEventsList] = useState([]);
   const [showEventForm, setShowEventForm] = useState(false);
@@ -177,7 +170,6 @@ export default function App() {
     fetchData();
   }, []);
 
-  // Manejador de Login con Clave Administrativa
   const handleAdminLogin = () => {
     if (passwordInput === accessKeys[targetRoleToLogin]) {
       setCurrentRole(targetRoleToLogin);
@@ -345,9 +337,6 @@ export default function App() {
   const decDays = Array.from({ length: 31 }, (_, i) => `2026-12-${String(i + 1).padStart(2, '0')}`);
   const activeTabObj = tabsList.find(t => t.key === activeTab);
 
-  // ==========================================
-  // PANTALLA DE BIENVENIDA / SELECCIÓN DE ACCESO
-  // ==========================================
   if (!currentRole) {
     return (
       <SafeAreaView style={styles.welcomeContainer}>
@@ -356,7 +345,6 @@ export default function App() {
           <Text style={styles.welcomeTitle}>Portal Congregacional</Text>
           <Text style={styles.welcomeSubtitle}>Selecciona tu modo de ingreso para continuar</Text>
 
-          {/* Acceso Público General */}
           <TouchableOpacity 
             style={styles.welcomePublicBtn} 
             onPress={() => { setCurrentRole('general'); setActiveTab('live'); }}
@@ -371,7 +359,6 @@ export default function App() {
             <View style={styles.dividerLine} />
           </View>
 
-          {/* Botones de Roles Administrativos que abren modal de clave */}
           <View style={styles.adminButtonsGrid}>
             <TouchableOpacity 
               style={styles.adminRoleBtn} 
@@ -396,7 +383,6 @@ export default function App() {
           </View>
         </View>
 
-        {/* MODAL DE INGRESO DE CONTRASEÑA */}
         <Modal visible={targetRoleToLogin !== null} transparent animationType="fade">
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
@@ -437,9 +423,6 @@ export default function App() {
     );
   }
 
-  // ==========================================
-  // APLICACIÓN PRINCIPAL SEGÚN ROL
-  // ==========================================
   return (
     <SafeAreaView style={styles.container}>
       {!isProjectorMode && (
@@ -498,7 +481,6 @@ export default function App() {
       <View style={[styles.mainWrapper, isDesktop && styles.desktopWrapper]}>
         <View style={{ flex: 1, width: '100%' }}>
           
-          {/* MÓDULO DE TRANSMISIÓN */}
           {activeTab === 'live' && (
             <ScrollView style={[styles.content, isProjectorMode && { padding: 0, backgroundColor: '#000' }]}>
               
@@ -615,7 +597,6 @@ export default function App() {
             </ScrollView>
           )}
 
-          {/* MÓDULO DE PETICIONES DE ORACIÓN */}
           {activeTab === 'prayers' && currentRole !== 'tesorero' && currentRole !== 'secretario' && (
             <ScrollView style={styles.content}>
               <Text style={styles.sectionTitle}>🙏 Red de Oración Congregacional</Text>
@@ -670,7 +651,6 @@ export default function App() {
             </ScrollView>
           )}
 
-          {/* MÓDULO DE COMITÉS */}
           {activeTab === 'comites' && (
             <ScrollView style={styles.content}>
               <Text style={styles.sectionTitle}>👥 Comités de Trabajo</Text>
@@ -734,7 +714,6 @@ export default function App() {
             </ScrollView>
           )}
 
-          {/* MÓDULO DE TESORERÍA */}
           {activeTab === 'finance' && currentRole !== 'general' && (
             <ScrollView style={styles.content}>
               <Text style={styles.centeredSectionTitle}>Diezmos - Ofrendas y Donaciones</Text>
@@ -780,7 +759,6 @@ export default function App() {
             </ScrollView>
           )}
 
-          {/* MÓDULO DE CULTOS */}
           {activeTab === 'services' && currentRole !== 'general' && (
             <ScrollView style={styles.content}>
               <Text style={styles.sectionTitle}>📅 Calendario de Cultos</Text>
@@ -875,7 +853,6 @@ export default function App() {
             </ScrollView>
           )}
 
-          {/* MÓDULO EXCLUSIVO DEL PASTOR: GESTIÓN DE ACCESOS Y CLAVES */}
           {activeTab === 'users' && currentRole === 'pastor' && (
             <ScrollView style={styles.content}>
               <Text style={styles.sectionTitle}>🔐 Gestión de Accesos y Claves</Text>
