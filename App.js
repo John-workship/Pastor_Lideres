@@ -54,6 +54,14 @@ export default function App() {
         { key: 'comites', label: '👥 Comités' }
       ];
     }
+    if (currentRole === 'tesorero') {
+      return [
+        { key: 'finance', label: '💰 Tesorería' },
+        { key: 'live', label: '📺 Transmisión' },
+        { key: 'comites', label: '👥 Comités' },
+        { key: 'services', label: '📋 Cultos' }
+      ];
+    }
     return [
       { key: 'live', label: '📺 Transmisión' },
       { key: 'prayers', label: '🙏 Oración' },
@@ -347,13 +355,17 @@ export default function App() {
           <TouchableOpacity style={styles.roleItem} onPress={() => { setCurrentRole('secretario'); setShowRoleSelector(false); setActiveTab('live'); }}>
             <Text style={styles.roleItemText}>📋 2. Secretario(a) (Transmisión, Comités, Cultos + Finanzas ver)</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.roleItem} onPress={() => { setCurrentRole('tesorero'); setShowRoleSelector(false); setActiveTab('finance'); }}>
-            <Text style={styles.roleItemText}>💰 3. Tesorero(a) (Finanzas total + Vistas)</Text>
+          <TouchableOpacity style={styles.roleItem} onPress={() => { 
+            setCurrentRole('tesorero'); 
+            setShowRoleSelector(false); 
+            setActiveTab('finance'); // Salta a tesorería al cambiar a tesorero
+          }}>
+            <Text style={styles.roleItemText}>💰 3. Tesorero(a) (Finanzas total + Vistas sin oración)</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.roleItem} onPress={() => { 
             setCurrentRole('general'); 
             setShowRoleSelector(false); 
-            setActiveTab('live'); // Asegurar que salte a transmisión al cambiar a general
+            setActiveTab('live'); 
           }}>
             <Text style={styles.roleItemText}>🌐 4. Acceso General (Público / Privacidad)</Text>
           </TouchableOpacity>
@@ -497,7 +509,7 @@ export default function App() {
           )}
 
           {/* MÓDULO DE PETICIONES DE ORACIÓN */}
-          {activeTab === 'prayers' && (
+          {activeTab === 'prayers' && currentRole !== 'tesorero' && (
             <ScrollView style={styles.content}>
               <Text style={styles.sectionTitle}>🙏 Red de Oración Congregacional</Text>
               
@@ -615,7 +627,7 @@ export default function App() {
             </ScrollView>
           )}
 
-          {/* MÓDULO DE TESORERÍA (Oculto para general) */}
+          {/* MÓDULO DE TESORERÍA */}
           {activeTab === 'finance' && currentRole !== 'general' && (
             <ScrollView style={styles.content}>
               <Text style={styles.centeredSectionTitle}>Diezmos - Ofrendas y Donaciones</Text>
@@ -661,7 +673,7 @@ export default function App() {
             </ScrollView>
           )}
 
-          {/* MÓDULO DE CULTOS (Oculto para general) */}
+          {/* MÓDULO DE CULTOS */}
           {activeTab === 'services' && currentRole !== 'general' && (
             <ScrollView style={styles.content}>
               <Text style={styles.sectionTitle}>📅 Calendario de Cultos</Text>
@@ -830,6 +842,6 @@ const styles = StyleSheet.create({
   supportBtnText: { color: '#00ffcc', fontSize: 12, fontWeight: 'bold' },
   statusToggleBtn: { paddingHorizontal: 8, paddingVertical: 6 },
   statusToggleText: { color: '#9ca3af', fontSize: 12, fontWeight: '600' },
-  eventDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#00ffcc', marginTop: 2 },
+  eventDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#00ffcc',marginTop: 2 },
   selectedEventDot: { backgroundColor: '#0b0f19' }
 });
