@@ -164,7 +164,7 @@ export default function App() {
     await supabase.from('sedes').delete().eq('id', targetId);
   };
 
-  // --- LÓGICA MEJORADA DE ORACIÓN ---
+  // Lógica de Oración
   const addPrayer = async () => {
     if (newPrayerRequest.trim() === '') return;
     const newObj = { 
@@ -397,7 +397,7 @@ export default function App() {
             </ScrollView>
           )}
 
-          {/* MÓDULO DE PETICIONES DE ORACIÓN REVOLUCIONADO */}
+          {/* MÓDULO DE PETICIONES DE ORACIÓN */}
           {activeTab === 'prayers' && (
             <ScrollView style={styles.content}>
               <Text style={styles.sectionTitle}>🙏 Red de Oración Congregacional</Text>
@@ -441,7 +441,6 @@ export default function App() {
 
                   <Text style={styles.cardSub}>{p.request}</Text>
 
-                  {/* Acciones de la Oración */}
                   <View style={styles.prayerActionRow}>
                     <TouchableOpacity style={styles.supportBtn} onPress={() => handleSupportPrayer(p)}>
                       <Text style={styles.supportBtnText}>🙏 Me uno en oración ({p.count || 0})</Text>
@@ -526,23 +525,48 @@ export default function App() {
           {activeTab === 'services' && (
             <ScrollView style={styles.content}>
               <Text style={styles.sectionTitle}>📅 Calendario de Cultos</Text>
+              
               <Text style={styles.cardSub}>Noviembre 2026</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.daysScroll}>
-                {novDays.map((dayStr) => (
-                  <TouchableOpacity key={dayStr} style={[styles.dayBox, selectedDay === dayStr && styles.selectedDayBox]} onPress={() => setSelectedDay(dayStr)}>
-                    <Text style={[styles.dayText, selectedDay === dayStr && styles.selectedDayText]}>{dayStr.split('-')[2]}</Text>
-                  </TouchableOpacity>
-                ))}
+                {novDays.map((dayStr) => {
+                  const hasEvent = eventsList.some(e => e.date === dayStr);
+                  return (
+                    <TouchableOpacity 
+                      key={dayStr} 
+                      style={[styles.dayBox, selectedDay === dayStr && styles.selectedDayBox]} 
+                      onPress={() => setSelectedDay(dayStr)}
+                    >
+                      <Text style={[styles.dayText, selectedDay === dayStr && styles.selectedDayText]}>
+                        {dayStr.split('-')[2]}
+                      </Text>
+                      {hasEvent && (
+                        <View style={[styles.eventDot, selectedDay === dayStr && styles.selectedEventDot]} />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
               </ScrollView>
               
               <View style={{ marginTop: 12 }}>
                 <Text style={styles.cardSub}>Diciembre 2026</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.daysScroll}>
-                  {decDays.map((dayStr) => (
-                    <TouchableOpacity key={dayStr} style={[styles.dayBox, selectedDay === dayStr && styles.selectedDayBox]} onPress={() => setSelectedDay(dayStr)}>
-                      <Text style={[styles.dayText, selectedDay === dayStr && styles.selectedDayText]}>{dayStr.split('-')[2]}</Text>
-                    </TouchableOpacity>
-                  ))}
+                  {decDays.map((dayStr) => {
+                    const hasEvent = eventsList.some(e => e.date === dayStr);
+                    return (
+                      <TouchableOpacity 
+                        key={dayStr} 
+                        style={[styles.dayBox, selectedDay === dayStr && styles.selectedDayBox]} 
+                        onPress={() => setSelectedDay(dayStr)}
+                      >
+                        <Text style={[styles.dayText, selectedDay === dayStr && styles.selectedDayText]}>
+                          {dayStr.split('-')[2]}
+                        </Text>
+                        {hasEvent && (
+                          <View style={[styles.eventDot, selectedDay === dayStr && styles.selectedEventDot]} />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
                 </ScrollView>
               </View>
 
@@ -667,5 +691,17 @@ const styles = StyleSheet.create({
   supportBtn: { backgroundColor: '#1f2937', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#374151' },
   supportBtnText: { color: '#00ffcc', fontSize: 12, fontWeight: 'bold' },
   statusToggleBtn: { paddingHorizontal: 8, paddingVertical: 6 },
-  statusToggleText: { color: '#9ca3af', fontSize: 12, fontWeight: '600' }
+  statusToggleText: { color: '#9ca3af', fontSize: 12, fontWeight: '600' },
+
+  // Estilos de Indicador de Eventos en Calendario
+  eventDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#00ffcc',
+    marginTop: 2,
+  },
+  selectedEventDot: {
+    backgroundColor: '#0b0f19',
+  }
 });
