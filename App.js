@@ -28,12 +28,15 @@ export default function App() {
   const [currentRole, setCurrentRole] = useState(null);
   
   const [showGeneralModal, setShowGeneralModal] = useState(false);
-  const [generalUserName, setGeneralUserName] = useState('');
+  const [generalFirstName, setGeneralFirstName] = useState('');
+  const [generalLastName, setGeneralLastName] = useState('');
+  
+  // Lista para almacenar los nombres de usuarios generales conectados en esta sesión y evitar duplicados
+  const [activeGeneralUsers, setActiveGeneralUsers] = useState([]);
 
   const [targetRoleToLogin, setTargetRoleToLogin] = useState(null);
   const [passwordInput, setPasswordInput] = useState('');
   
-  // Lista de perfiles con visibilidad configurable
   const [adminRoles, setAdminRoles] = useState([
     { id: 'pastor', name: 'Pastor', key: '6789', icon: '📖', isVisible: true },
     { id: 'secretario', name: 'Secretario(a)', key: '5555', icon: '📋', isVisible: true },
@@ -67,8 +70,7 @@ export default function App() {
     if (currentRole === 'general') {
       return [
         { key: 'live', title: 'Transmisión en Vivo', subtitle: 'Sigue el culto y la palabra en directo', icon: '📺', color: '#00ffcc' },
-        { key: 'prayers', title: 'Red de Oración', subtitle: 'Publica y únete a peticiones de la hermandad', icon: '🙏', color: '#34d399' },
-        { key: 'comites', title: 'Comités de Trabajo', subtitle: 'Conoce los líderes y secretarios de área', icon: '👥', color: '#fbbf24' }
+        { key: 'prayers', title: 'Red de Oración', subtitle: 'Publica y únete a peticiones de la hermandad', icon: '🙏', color: '#34d399' }
       ];
     }
     if (currentRole === 'tesorero') {
@@ -87,16 +89,14 @@ export default function App() {
         { key: 'finance', title: 'Tesorería (Visualización)', subtitle: 'Consulta los fondos y reportes financieros', icon: '💰', color: '#a78bfa' }
       ];
     }
-    // Perfil de Líderes: acceso a Comités, Red de Oración y Calendario
     if (currentRole === 'lideres' || (!['pastor', 'secretario', 'tesorero', 'general'].includes(currentRole) && currentRole !== null)) {
       return [
+        { key: 'live', title: 'Transmisión en Vivo', subtitle: 'Sigue el culto en directo', icon: '📺', color: '#00ffcc' },
         { key: 'comites', title: 'Comités de Trabajo', subtitle: 'Consulta los comités y líderes de área', icon: '👥', color: '#fbbf24' },
         { key: 'prayers', title: 'Red de Oración', subtitle: 'Visualiza y participa en peticiones', icon: '🙏', color: '#34d399' },
-        { key: 'services', title: 'Calendario de Cultos', subtitle: 'Consulta la agenda y eventos programados', icon: '📋', color: '#a78bfa' },
-        { key: 'live', title: 'Transmisión en Vivo', subtitle: 'Sigue el culto en directo', icon: '📺', color: '#00ffcc' }
+        { key: 'services', title: 'Calendario de Cultos', subtitle: 'Consulta la agenda y eventos programados', icon: '📋', color: '#a78bfa' }
       ];
     }
-    // Menú completo del Pastor
     return [
       { key: 'live', title: 'Transmisión en Vivo', subtitle: 'Administra sedes y el reproductor en directo', icon: '📺', color: '#00ffcc' },
       { key: 'prayers', title: 'Red de Oración', subtitle: 'Gestiona peticiones y marca respondidas', icon: '🙏', color: '#34d399' },
@@ -206,6 +206,24 @@ export default function App() {
   };
 
   const handleGeneralLogin = () => {
+    const firstNameClean = generalFirstName.trim();
+    const lastNameClean = generalLastName.trim();
+
+    if (!firstNameClean || !lastNameClean) {
+      alert('⚠️ Por favor ingresa tu Primer Nombre y Primer Apellido para continuar.');
+      return;
+    }
+
+    const fullNameKey = `${firstNameClean.toLowerCase()} ${lastNameClean.toLowerCase()}`;
+
+    // Verificamos si este nombre y apellido ya se encuentran registrados en la sesión activa
+    if (activeGeneralUsers.includes(fullNameKey)) {
+      alert('⚠️ Ya existe un usuario activo con este mismo Nombre y Apellido. Por favor verifica tus datos.');
+      return;
+    }
+
+    // Agregamos el usuario a la lista de activos
+    setActiveGeneralUsers(prev => [...prev, fullNameKey]);
     setCurrentRole('general');
     setActiveTab('home');
     setShowGeneralModal(false);
@@ -294,7 +312,8 @@ export default function App() {
     if (newPrayerRequest.trim() === '') return;
     const newId = String(Date.now());
     
-    const authorName = currentRole === 'general' ? (generalUserName.trim() || 'Anónimo') : (newPrayerName.trim() || 'Líder');
+    const fullName = `${generalFirstName.trim()} ${generalLastName.trim()}`.trim();
+    const authorName = currentRole === 'general' ? (fullName || 'Anónimo') : (newPrayerName.trim() || 'Líder');
 
     const newObj = { 
       id: newId, 
@@ -417,6 +436,10 @@ export default function App() {
   const novDays = Array.from({ length: 30 }, (_, i) => `2026-11-${String(i + 1).padStart(2, '0')}`);
   const decDays = Array.from({ length: 31 }, (_, i) => `2026-12-${String(i + 1).padStart(2, '0')}`);
 
+  const userDisplayName = generalFirstName && generalLastName 
+    ? `${generalFirstName} ${generalLastName}` 
+    : 'Invitado';
+
   if (!currentRole) {
     return (
       <SafeAreaView style={styles.welcomeContainer}>
@@ -427,10 +450,10 @@ export default function App() {
 
           <TouchableOpacity 
             style={styles.welcomePublicBtn} 
-            onPress={() => { setGeneralUserName(''); setShowGeneralModal(true); }}
+            onPress={() => { setGeneralFirstName(''); setGeneralLastName(''); setShowGeneralModal(true); }}
           >
             <Text style={styles.welcomePublicBtnText}>🌐 Ingresar a la Congregación</Text>
-            <Text style={styles.welcomePublicBtnSub}>Transmisión, Peticiones y Comités (Sin contraseña)</Text>
+            <Text style={styles.welcomePublicBtnSub}>Transmisión y Red de Oración (Requiere Nombre y Apellido)</Text>
           </TouchableOpacity>
 
           <View style={styles.dividerRow}>
@@ -456,15 +479,23 @@ export default function App() {
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>👋 ¡Bienvenido a la Congregación!</Text>
-              <Text style={styles.modalSub}>Ingresa tu nombre o apodo para identificarte (Opcional):</Text>
+              <Text style={styles.modalSub}>Ingresa tus datos personales para identificarte:</Text>
               
               <TextInput 
                 style={styles.input} 
-                placeholder="Ej. María Gómez o Anónimo" 
+                placeholder="Primer Nombre *" 
                 placeholderTextColor="#666" 
-                value={generalUserName} 
-                onChangeText={setGeneralUserName} 
+                value={generalFirstName} 
+                onChangeText={setGeneralFirstName} 
                 autoFocus
+              />
+
+              <TextInput 
+                style={styles.input} 
+                placeholder="Primer Apellido *" 
+                placeholderTextColor="#666" 
+                value={generalLastName} 
+                onChangeText={setGeneralLastName} 
               />
 
               <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
@@ -535,7 +566,7 @@ export default function App() {
           <View style={styles.roleSelectorWrapper}>
             <TouchableOpacity style={styles.roleButtonActive} onPress={() => setCurrentRole(null)}>
               <Text style={styles.roleButtonText}>
-                👤 {currentRoleObj ? currentRoleObj.name : (generalUserName ? generalUserName : 'Invitado')} (Salir ⇦)
+                👤 {currentRoleObj ? currentRoleObj.name : userDisplayName} (Salir ⇦)
               </Text>
             </TouchableOpacity>
           </View>
@@ -560,7 +591,7 @@ export default function App() {
               <View style={styles.dashboardWelcomeCard}>
                 <Text style={styles.dashboardWelcomeEmoji}>✨</Text>
                 <Text style={styles.dashboardWelcomeTitle}>
-                  Bienvenido, {currentRoleObj ? currentRoleObj.name : (generalUserName || 'Hermanos')}
+                  Bienvenido, {currentRoleObj ? currentRoleObj.name : userDisplayName}
                 </Text>
                 <Text style={styles.dashboardWelcomeSub}>Selecciona una opción para acceder a sus funciones:</Text>
               </View>
@@ -788,7 +819,7 @@ export default function App() {
             </ScrollView>
           )}
 
-          {activeTab === 'comites' && (
+          {activeTab === 'comites' && currentRole !== 'general' && (
             <ScrollView style={styles.content}>
               <Text style={styles.sectionTitle}>👥 Comités de Trabajo</Text>
               
@@ -1091,7 +1122,7 @@ export default function App() {
                     placeholder="Clave de acceso" 
                     placeholderTextColor="#666" 
                     value={newRoleKey} 
-                    onChangeText={setNewRoleKey} 
+                    onChangeText={newRoleKey} 
                   />
 
                   <TouchableOpacity style={styles.actionBtn} onPress={handleAddNewRole}>
@@ -1151,7 +1182,7 @@ const styles = StyleSheet.create({
   dashboardWelcomeTitle: { fontSize: 18, fontWeight: 'bold', color: '#ffffff', textAlign: 'center', marginBottom: 4 },
   dashboardWelcomeSub: { fontSize: 12, color: '#9ca3af', textAlign: 'center' },
   dashboardGrid: { gap: 12 },
-  desktopDashboardGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-width' },
+  desktopDashboardGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
   dashboardCard: { backgroundColor: '#111827', padding: 18, borderRadius: 16, marginBottom: 12, borderWidth: 1.5, borderColor: '#1f2937' },
   dashboardCardIcon: { fontSize: 26, marginBottom: 8 },
   dashboardCardTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 4 },
