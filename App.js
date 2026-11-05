@@ -58,19 +58,17 @@ export default function App() {
   const [newSedeIsLive, setNewSedeIsLive] = useState(false);
 
   // Oración
-  const [prayers, setPrayers] = useState([
-    { id: '1', name: 'Hermana María G.', request: 'Oración por la salud de la familia y pronta recuperación.', status: 'active', count: 5 },
-    { id: '2', name: 'Hermano Carlos R.', request: 'Acción de gracias y bendición para un proyecto de trabajo.', status: 'answered', count: 12 },
-  ]);
+  const [prayers, setPrayers] = useState([]);
   const [newPrayerName, setNewPrayerName] = useState('');
   const [newPrayerRequest, setNewPrayerRequest] = useState('');
 
-  // Comités
+  // Comités (Actualizado con Líder y Secretario)
   const [comitesList, setComitesList] = useState([]);
   const [showComiteForm, setShowComiteForm] = useState(false);
   const [editingComiteId, setEditingComiteId] = useState(null);
   const [newComiteName, setNewComiteName] = useState('');
-  const [newComiteDesc, setNewComiteDesc] = useState('');
+  const [newComiteLider, setNewComiteLider] = useState('');
+  const [newComiteSecretario, setNewComiteSecretario] = useState('');
 
   // Tesorería
   const [financeList, setFinanceList] = useState([]);
@@ -108,7 +106,14 @@ export default function App() {
       }
 
       const { data: comitesData } = await supabase.from('comites').select('*');
-      if (comitesData && comitesData.length > 0) setComitesList(comitesData);
+      if (comitesData && comitesData.length > 0) {
+        setComitesList(comitesData.map(c => ({
+          ...c,
+          id: String(c.id),
+          lider: c.lider || '',
+          secretario: c.secretario || ''
+        })));
+      }
 
       const { data: financeData } = await supabase.from('finance').select('*');
       if (financeData && financeData.length > 0) setFinanceList(financeData);
@@ -198,16 +203,23 @@ export default function App() {
     await supabase.from('prayers').delete().eq('id', String(id));
   };
 
-  // Lógica Comités
+  // Lógica Comités (Con Edición, Líder y Secretario)
   const handleSaveComite = async () => {
     const payload = {
       id: editingComiteId ? String(editingComiteId) : String(Date.now()),
       nombre: newComiteName.trim() || 'Comité',
-      descripcion: newComiteDesc.trim()
+      lider: newComiteLider.trim(),
+      secretario: newComiteSecretario.trim()
     };
+    
     setComitesList(prev => editingComiteId ? prev.map(c => c.id === payload.id ? payload : c) : [...prev, payload]);
     await supabase.from('comites').upsert([payload]);
-    setNewComiteName(''); setNewComiteDesc(''); setEditingComiteId(null); setShowComiteForm(false);
+    
+    setNewComiteName(''); 
+    setNewComiteLider(''); 
+    setNewComiteSecretario(''); 
+    setEditingComiteId(null); 
+    setShowComiteForm(false);
   };
 
   const handleDeleteComite = async (id) => {
@@ -403,21 +415,8 @@ export default function App() {
               <Text style={styles.sectionTitle}>🙏 Red de Oración Congregacional</Text>
               
               <View style={styles.addSedeCard}>
-                <TextInput 
-                  style={styles.input} 
-                  placeholder="Tu Nombre (Opcional)" 
-                  placeholderTextColor="#666" 
-                  value={newPrayerName} 
-                  onChangeText={setNewPrayerName} 
-                />
-                <TextInput 
-                  style={[styles.input, { height: 80 }]} 
-                  placeholder="Escribe tu motivo de oración o agradecimiento..." 
-                  placeholderTextColor="#666" 
-                  multiline 
-                  value={newPrayerRequest} 
-                  onChangeText={setNewPrayerRequest} 
-                />
+                <TextInput style={styles.input} placeholder="Tu Nombre (Opcional)" placeholderTextColor="#666" value={newPrayerName} onChangeText={setNewPrayerName} />
+                <TextInput style={[styles.input, { height: 80 }]} placeholder="Escribe tu motivo de oración..." placeholderTextColor="#666" multiline value={newPrayerRequest} onChangeText={setNewPrayerRequest} />
                 <TouchableOpacity style={styles.actionBtn} onPress={addPrayer}>
                   <Text style={styles.actionBtnText}>Publicar Petición</Text>
                 </TouchableOpacity>
@@ -438,14 +437,11 @@ export default function App() {
                       <Text style={{ color: '#ff0055', fontWeight: 'bold' }}>✕</Text>
                     </TouchableOpacity>
                   </View>
-
                   <Text style={styles.cardSub}>{p.request}</Text>
-
                   <View style={styles.prayerActionRow}>
                     <TouchableOpacity style={styles.supportBtn} onPress={() => handleSupportPrayer(p)}>
                       <Text style={styles.supportBtnText}>🙏 Me uno en oración ({p.count || 0})</Text>
                     </TouchableOpacity>
-
                     <TouchableOpacity style={styles.statusToggleBtn} onPress={() => togglePrayerStatus(p)}>
                       <Text style={styles.statusToggleText}>
                         {p.status === 'answered' ? '🔄 Marcar en Oración' : '✅ Marcar Respondida'}
@@ -457,30 +453,78 @@ export default function App() {
             </ScrollView>
           )}
 
-          {/* MÓDULO DE COMITÉS */}
+          {/* MÓDULO DE COMITÉS ACTUALIZADO */}
           {activeTab === 'comites' && (
             <ScrollView style={styles.content}>
-              <Text style={styles.sectionTitle}>Comités de Trabajo</Text>
+              <Text style={styles.sectionTitle}>👥 Comités de Trabajo</Text>
+              
               {comitesList.map(comite => (
                 <View key={comite.id} style={styles.card}>
                   <View style={styles.cardHeaderRow}>
-                    <Text style={styles.cardTitle}>{comite.nombre}</Text>
-                    <TouchableOpacity onPress={() => handleDeleteComite(comite.id)}>
-                      <Text style={{ color: '#ff0055', fontWeight: 'bold' }}>✕ Eliminar</Text>
-                    </TouchableOpacity>
+                    <Text style={styles.cardTitle}>🏛️ {comite.nombre}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <TouchableOpacity 
+                        style={{ marginRight: 12 }}
+                        onPress={() => {
+                          setEditingComiteId(comite.id);
+                          setNewComiteName(comite.nombre);
+                          setNewComiteLider(comite.lider);
+                          setNewComiteSecretario(comite.secretario);
+                          setShowComiteForm(true);
+                        }}
+                      >
+                        <Text style={{ color: '#00ffcc', fontWeight: 'bold' }}>✏️ Editar</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => handleDeleteComite(comite.id)}>
+                        <Text style={{ color: '#ff0055', fontWeight: 'bold' }}>✕ Eliminar</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                  <Text style={styles.cardSub}>{comite.descripcion}</Text>
+
+                  <View style={{ marginTop: 8, backgroundColor: '#1f2937', padding: 10, borderRadius: 8 }}>
+                    <Text style={styles.cardSub}>👤 <Text style={{ fontWeight: 'bold', color: '#00ffcc' }}>1. Líder:</Text> {comite.lider || 'No asignado'}</Text>
+                    <Text style={[styles.cardSub, { marginTop: 4 }]}>📝 <Text style={{ fontWeight: 'bold', color: '#00ffcc' }}>2. Secretario:</Text> {comite.secretario || 'No asignado'}</Text>
+                  </View>
                 </View>
               ))}
-              <TouchableOpacity style={styles.addSedeToggleBtn} onPress={() => setShowComiteForm(!showComiteForm)}>
+
+              <TouchableOpacity style={styles.addSedeToggleBtn} onPress={() => {
+                setEditingComiteId(null);
+                setNewComiteName('');
+                setNewComiteLider('');
+                setNewComiteSecretario('');
+                setShowComiteForm(!showComiteForm);
+              }}>
                 <Text style={styles.addSedeToggleText}>{showComiteForm ? '❌ Cancelar' : '➕ Crear Nuevo Comité'}</Text>
               </TouchableOpacity>
+
               {showComiteForm && (
                 <View style={styles.addSedeCard}>
-                  <TextInput style={styles.input} placeholder="Nombre del Comité" placeholderTextColor="#666" value={newComiteName} onChangeText={setNewComiteName} />
-                  <TextInput style={styles.input} placeholder="Descripción" placeholderTextColor="#666" value={newComiteDesc} onChangeText={setNewComiteDesc} />
+                  <TextInput 
+                    style={styles.input} 
+                    placeholder="Nombre del Comité (Ej: Comité de Jóvenes)" 
+                    placeholderTextColor="#666" 
+                    value={newComiteName} 
+                    onChangeText={setNewComiteName} 
+                  />
+                  <TextInput 
+                    style={styles.input} 
+                    placeholder="1. Nombre del Líder" 
+                    placeholderTextColor="#666" 
+                    value={newComiteLider} 
+                    onChangeText={setNewComiteLider} 
+                  />
+                  <TextInput 
+                    style={styles.input} 
+                    placeholder="2. Nombre del Secretario" 
+                    placeholderTextColor="#666" 
+                    value={newComiteSecretario} 
+                    onChangeText={setNewComiteSecretario} 
+                  />
                   <TouchableOpacity style={styles.actionBtn} onPress={handleSaveComite}>
-                    <Text style={styles.actionBtnText}>Guardar Comité</Text>
+                    <Text style={styles.actionBtnText}>
+                      {editingComiteId ? 'Actualizar Comité' : 'Guardar Comité'}
+                    </Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -687,21 +731,13 @@ const styles = StyleSheet.create({
   activePrayerBadgeText: { color: '#fbbf24', fontSize: 10, fontWeight: 'bold' },
   answeredBadge: { backgroundColor: '#064e3b', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
   answeredBadgeText: { color: '#34d399', fontSize: 10, fontWeight: 'bold' },
-  prayerActionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, pt: 8, borderTopWidth: 1, borderColor: '#1f2937' },
+  prayerActionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingTop: 8, borderTopWidth: 1, borderColor: '#1f2937' },
   supportBtn: { backgroundColor: '#1f2937', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#374151' },
   supportBtnText: { color: '#00ffcc', fontSize: 12, fontWeight: 'bold' },
   statusToggleBtn: { paddingHorizontal: 8, paddingVertical: 6 },
   statusToggleText: { color: '#9ca3af', fontSize: 12, fontWeight: '600' },
 
-  // Estilos de Indicador de Eventos en Calendario
-  eventDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: '#00ffcc',
-    marginTop: 2,
-  },
-  selectedEventDot: {
-    backgroundColor: '#0b0f19',
-  }
+  // Estilos de Calendario
+  eventDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#00ffcc', marginTop: 2 },
+  selectedEventDot: { backgroundColor: '#0b0f19' }
 });
