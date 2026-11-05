@@ -33,14 +33,20 @@ export default function App() {
   const [targetRoleToLogin, setTargetRoleToLogin] = useState(null);
   const [passwordInput, setPasswordInput] = useState('');
   
-  // Lista dinámica de perfiles administrativos configurables por el Pastor
+  // Lista dinámica de perfiles administrativos
   const [adminRoles, setAdminRoles] = useState([
     { id: 'pastor', name: 'Pastor', key: '6789', icon: '📖' },
     { id: 'secretario', name: 'Secretario(a)', key: '5555', icon: '📋' },
     { id: 'tesorero', name: 'Tesorero(a)', key: '3333', icon: '💰' }
   ]);
 
-  // Estados temporales para crear un nuevo acceso
+  // Estado para controlar qué perfil se está editando individualmente ('pastor', 'secretario', etc., o null)
+  const [editingRoleId, setEditingRoleId] = useState(null);
+  const [tempRoleName, setTempRoleName] = useState('');
+  const [tempRoleKey, setTempRoleKey] = useState('');
+
+  // Control para mostrar el formulario de crear nuevo acceso
+  const [showCreateNewRoleForm, setShowCreateNewRoleForm] = useState(false);
   const [newRoleName, setNewRoleName] = useState('');
   const [newRoleKey, setNewRoleKey] = useState('');
 
@@ -82,7 +88,6 @@ export default function App() {
         { key: 'finance', title: 'Tesorería (Visualización)', subtitle: 'Consulta los fondos y reportes financieros', icon: '💰', color: '#a78bfa' }
       ];
     }
-    // Si es pastor o un rol personalizado creado por él, tiene acceso total o adaptado
     return [
       { key: 'live', title: 'Transmisión en Vivo', subtitle: 'Administra sedes y el reproductor en directo', icon: '📺', color: '#00ffcc' },
       { key: 'prayers', title: 'Red de Oración', subtitle: 'Gestiona peticiones y marca respondidas', icon: '🙏', color: '#34d399' },
@@ -197,6 +202,16 @@ export default function App() {
     setShowGeneralModal(false);
   };
 
+  const handleSaveSingleRole = (roleId) => {
+    if (!tempRoleName.trim() || !tempRoleKey.trim()) {
+      alert('⚠️ El nombre y la clave no pueden estar vacíos.');
+      return;
+    }
+    setAdminRoles(prev => prev.map(r => r.id === roleId ? { ...r, name: tempRoleName.trim(), key: tempRoleKey.trim() } : r));
+    setEditingRoleId(null);
+    alert('✅ ¡Perfil actualizado y guardado con éxito!');
+  };
+
   const handleAddNewRole = () => {
     if (!newRoleName.trim() || !newRoleKey.trim()) {
       alert('⚠️ Por favor ingresa el nombre del cargo y su respectiva clave.');
@@ -211,6 +226,7 @@ export default function App() {
     setAdminRoles(prev => [...prev, { id: newId, name: newRoleName.trim(), key: newRoleKey.trim(), icon: '👤' }]);
     setNewRoleName('');
     setNewRoleKey('');
+    setShowCreateNewRoleForm(false);
     alert('✅ ¡Nuevo acceso creado con éxito!');
   };
 
@@ -964,71 +980,105 @@ export default function App() {
           {activeTab === 'users' && currentRole === 'pastor' && (
             <ScrollView style={styles.content}>
               <Text style={styles.sectionTitle}>🔐 Gestión de Accesos y Claves</Text>
-              <Text style={styles.cardSub}>Modifica los nombres, claves de los perfiles existentes o crea nuevos accesos administrativos:</Text>
+              <Text style={styles.cardSub}>Administra los perfiles de acceso. Haz clic en "Modificar" para editar el nombre o la clave de cada uno:</Text>
 
-              <View style={styles.addSedeCard}>
-                {adminRoles.map((role, index) => (
-                  <View key={role.id} style={{ marginBottom: 14 }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                      <Text style={{ color: '#00ffcc', fontWeight: 'bold' }}>Perfil {index + 1}:</Text>
-                      {role.id !== 'pastor' && (
-                        <TouchableOpacity onPress={() => handleDeleteAdminRole(role.id)}>
-                          <Text style={{ color: '#ff0055', fontSize: 12, fontWeight: 'bold' }}>✕ Eliminar Perfil</Text>
-                        </TouchableOpacity>
-                      )}
+              {adminRoles.map((role) => {
+                const isEditing = editingRoleId === role.id;
+
+                return (
+                  <View key={role.id} style={styles.card}>
+                    <View style={styles.cardHeaderRow}>
+                      <Text style={styles.cardTitle}>{role.icon} {role.name}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        {!isEditing && (
+                          <TouchableOpacity onPress={() => {
+                            setEditingRoleId(role.id);
+                            setTempRoleName(role.name);
+                            setTempRoleKey(role.key);
+                          }}>
+                            <Text style={{ color: '#00ffcc', fontWeight: 'bold', fontSize: 13 }}>✏️ Modificar</Text>
+                          </TouchableOpacity>
+                        )}
+                        {role.id !== 'pastor' && (
+                          <TouchableOpacity onPress={() => handleDeleteAdminRole(role.id)}>
+                            <Text style={{ color: '#ff0055', fontWeight: 'bold', fontSize: 13 }}>✕ Eliminar</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
                     </View>
 
-                    <Text style={{ color: '#9ca3af', fontSize: 11, marginBottom: 2 }}>Nombre del Cargo / Perfil:</Text>
-                    <TextInput 
-                      style={styles.input} 
-                      value={role.name} 
-                      onChangeText={(val) => {
-                        const updated = [...adminRoles];
-                        updated[index].name = val;
-                        setAdminRoles(updated);
-                      }} 
-                    />
+                    {isEditing ? (
+                      <View style={{ marginTop: 10 }}>
+                        <Text style={{ color: '#9ca3af', fontSize: 11, marginBottom: 2 }}>Nuevo Nombre del Perfil:</Text>
+                        <TextInput 
+                          style={styles.input} 
+                          value={tempRoleName} 
+                          onChangeText={setTempRoleName} 
+                        />
 
-                    <Text style={{ color: '#9ca3af', fontSize: 11, marginBottom: 2 }}>Clave de Acceso:</Text>
-                    <TextInput 
-                      style={styles.input} 
-                      value={role.key} 
-                      onChangeText={(val) => {
-                        const updated = [...adminRoles];
-                        updated[index].key = val;
-                        setAdminRoles(updated);
-                      }} 
-                    />
+                        <Text style={{ color: '#9ca3af', fontSize: 11, marginBottom: 2 }}>Nueva Clave de Acceso:</Text>
+                        <TextInput 
+                          style={styles.input} 
+                          value={tempRoleKey} 
+                          onChangeText={setTempRoleKey} 
+                        />
+
+                        <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+                          <TouchableOpacity 
+                            style={[styles.actionBtn, { backgroundColor: '#374151', flex: 1, padding: 10 }]} 
+                            onPress={() => setEditingRoleId(null)}
+                          >
+                            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 12 }}>Cancelar</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity 
+                            style={[styles.actionBtn, { flex: 1, padding: 10 }]} 
+                            onPress={() => handleSaveSingleRole(role.id)}
+                          >
+                            <Text style={{ color: '#0b0f19', fontWeight: 'bold', fontSize: 12 }}>💾 Guardar</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ) : (
+                      <Text style={[styles.cardSub, { color: '#9ca3af' }]}>Clave actual: ••••</Text>
+                    )}
                   </View>
-                ))}
+                );
+              })}
 
-                <View style={{ borderTopWidth: 1, borderColor: '#374151', marginVertical: 12, paddingTop: 12 }}>
-                  <Text style={{ color: '#fbbf24', fontWeight: 'bold', marginBottom: 6 }}>➕ Crear Nuevo Acceso / Perfil</Text>
+              <TouchableOpacity 
+                style={styles.addSedeToggleBtn} 
+                onPress={() => setShowCreateNewRoleForm(!showCreateNewRoleForm)}
+              >
+                <Text style={styles.addSedeToggleText}>
+                  {showCreateNewRoleForm ? '❌ Cancelar' : '➕ Crear Nuevo Acceso / Perfil'}
+                </Text>
+              </TouchableOpacity>
+
+              {showCreateNewRoleForm && (
+                <View style={styles.addSedeCard}>
+                  <Text style={{ color: '#00ffcc', fontWeight: 'bold', marginBottom: 8 }}>Registrar Nuevo Perfil Administrativo</Text>
                   
                   <TextInput 
                     style={styles.input} 
-                    placeholder="Nombre del nuevo perfil (Ej. Diácono)" 
+                    placeholder="Nombre del cargo (Ej. Diácono o Líder de Jóvenes)" 
                     placeholderTextColor="#666" 
                     value={newRoleName} 
                     onChangeText={setNewRoleName} 
                   />
                   <TextInput 
                     style={styles.input} 
-                    placeholder="Clave de acceso numérica o texto" 
+                    placeholder="Clave de acceso numérica" 
                     placeholderTextColor="#666" 
                     value={newRoleKey} 
                     onChangeText={setNewRoleKey} 
                   />
 
-                  <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#374151', marginTop: 4 }]} onPress={handleAddNewRole}>
-                    <Text style={{ color: '#00ffcc', fontWeight: 'bold' }}>Añadir Nuevo Perfil</Text>
+                  <TouchableOpacity style={styles.actionBtn} onPress={handleAddNewRole}>
+                    <Text style={styles.actionBtnText}>Guardar Nuevo Acceso</Text>
                   </TouchableOpacity>
                 </View>
-
-                <TouchableOpacity style={[styles.actionBtn, { marginTop: 16 }]} onPress={() => alert('✅ ¡Perfiles y claves actualizados con éxito!')}>
-                  <Text style={styles.actionBtnText}>Guardar Cambios</Text>
-                </TouchableOpacity>
-              </View>
+              )}
             </ScrollView>
           )}
 
