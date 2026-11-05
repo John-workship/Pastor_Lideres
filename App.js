@@ -33,12 +33,12 @@ export default function App() {
   const [targetRoleToLogin, setTargetRoleToLogin] = useState(null);
   const [passwordInput, setPasswordInput] = useState('');
   
-  // Lista de perfiles con la propiedad 'isVisible' para ocultar/mostrar en el inicio
+  // Lista de perfiles con visibilidad configurable
   const [adminRoles, setAdminRoles] = useState([
     { id: 'pastor', name: 'Pastor', key: '6789', icon: '📖', isVisible: true },
     { id: 'secretario', name: 'Secretario(a)', key: '5555', icon: '📋', isVisible: true },
     { id: 'tesorero', name: 'Tesorero(a)', key: '3333', icon: '💰', isVisible: true },
-    { id: 'lideres', name: 'Líderes', key: '1234', icon: '👥', isVisible: false } // Inicia oculto por defecto
+    { id: 'lideres', name: 'Líderes', key: '1234', icon: '👥', isVisible: false }
   ]);
 
   const [editingRoleId, setEditingRoleId] = useState(null);
@@ -87,10 +87,11 @@ export default function App() {
         { key: 'finance', title: 'Tesorería (Visualización)', subtitle: 'Consulta los fondos y reportes financieros', icon: '💰', color: '#a78bfa' }
       ];
     }
-    // Perfil de Líderes u otros personalizados: acceso exclusivo a Comités y Calendario (y transmisión opcional si se desea)
+    // Perfil de Líderes: acceso a Comités, Red de Oración y Calendario
     if (currentRole === 'lideres' || (!['pastor', 'secretario', 'tesorero', 'general'].includes(currentRole) && currentRole !== null)) {
       return [
         { key: 'comites', title: 'Comités de Trabajo', subtitle: 'Consulta los comités y líderes de área', icon: '👥', color: '#fbbf24' },
+        { key: 'prayers', title: 'Red de Oración', subtitle: 'Visualiza y participa en peticiones', icon: '🙏', color: '#34d399' },
         { key: 'services', title: 'Calendario de Cultos', subtitle: 'Consulta la agenda y eventos programados', icon: '📋', color: '#a78bfa' },
         { key: 'live', title: 'Transmisión en Vivo', subtitle: 'Sigue el culto en directo', icon: '📺', color: '#00ffcc' }
       ];
@@ -293,7 +294,7 @@ export default function App() {
     if (newPrayerRequest.trim() === '') return;
     const newId = String(Date.now());
     
-    const authorName = currentRole === 'general' ? (generalUserName.trim() || 'Anónimo') : (newPrayerName.trim() || 'Anónimo');
+    const authorName = currentRole === 'general' ? (generalUserName.trim() || 'Anónimo') : (newPrayerName.trim() || 'Líder');
 
     const newObj = { 
       id: newId, 
@@ -304,7 +305,7 @@ export default function App() {
     };
 
     setPrayers(prev => [newObj, ...prev]);
-    if (currentRole === 'general') {
+    if (currentRole === 'general' || currentRole === 'lideres') {
       setMyLocalPrayerIds(prev => [...prev, newId]);
     }
     await supabase.from('prayers').insert([newObj]);
@@ -334,8 +335,8 @@ export default function App() {
   };
 
   const handleDeletePrayer = async (id) => {
-    if (['tesorero', 'secretario', 'lideres'].includes(currentRole)) return;
-    if (currentRole === 'general' && !myLocalPrayerIds.includes(String(id))) return;
+    if (['tesorero', 'secretario'].includes(currentRole)) return;
+    if ((currentRole === 'general' || currentRole === 'lideres') && !myLocalPrayerIds.includes(String(id))) return;
     setPrayers(prev => prev.filter(p => p.id !== String(id)));
     await supabase.from('prayers').delete().eq('id', String(id));
   };
@@ -439,7 +440,6 @@ export default function App() {
           </View>
 
           <View style={styles.adminButtonsGrid}>
-            {/* Solo muestra en la pantalla de bienvenida los perfiles que tengan isVisible en true */}
             {adminRoles.filter(role => role.isVisible).map(role => (
               <TouchableOpacity 
                 key={role.id}
@@ -698,12 +698,12 @@ export default function App() {
             </ScrollView>
           )}
 
-          {activeTab === 'prayers' && currentRole !== 'general' && currentRole !== 'lideres' && (
+          {activeTab === 'prayers' && currentRole !== 'tesorero' && currentRole !== 'secretario' && (
             <ScrollView style={styles.content}>
               <Text style={styles.sectionTitle}>🙏 Red de Oración Congregacional</Text>
               
               <View style={styles.addSedeCard}>
-                {currentRole !== 'general' && (
+                {currentRole !== 'general' && currentRole !== 'lideres' && (
                   <TextInput style={styles.input} placeholder="Tu Nombre (Opcional)" placeholderTextColor="#666" value={newPrayerName} onChangeText={setNewPrayerName} />
                 )}
                 <TextInput style={[styles.input, { height: 80 }]} placeholder="Escribe tu motivo de oración..." placeholderTextColor="#666" multiline value={newPrayerRequest} onChangeText={setNewPrayerRequest} />
@@ -712,40 +712,79 @@ export default function App() {
                 </TouchableOpacity>
               </View>
 
-              {prayers.map(p => (
-                <View key={p.id} style={[styles.card, p.status === 'answered' && styles.answeredCard]}>
-                  <View style={styles.cardHeaderRow}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Text style={styles.cardTitle}>{p.name}</Text>
-                      {p.status === 'answered' ? (
-                        <View style={styles.answeredBadge}><Text style={styles.answeredBadgeText}>✨ RESPONDIDA</Text></View>
-                      ) : (
-                        <View style={styles.activePrayerBadge}><Text style={styles.activePrayerBadgeText}>🟡 EN ORACIÓN</Text></View>
+              {prayers.map(p => {
+                const isMyPrayer = (currentRole === 'general' || currentRole === 'lideres') && myLocalPrayerIds.includes(String(p.id));
+                const isEditingThis = editingPrayerId === p.id;
+
+                return (
+                  <View key={p.id} style={[styles.card, p.status === 'answered' && styles.answeredCard]}>
+                    <View style={styles.cardHeaderRow}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Text style={styles.cardTitle}>{p.name}</Text>
+                        {p.status === 'answered' ? (
+                          <View style={styles.answeredBadge}><Text style={styles.answeredBadgeText}>✨ RESPONDIDA</Text></View>
+                        ) : (
+                          <View style={styles.activePrayerBadge}><Text style={styles.activePrayerBadgeText}>🟡 EN ORACIÓN</Text></View>
+                        )}
+                      </View>
+                      
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        {(currentRole === 'pastor' || isMyPrayer) && !isEditingThis && (
+                          <TouchableOpacity onPress={() => { setEditingPrayerId(p.id); setEditingPrayerText(p.request); }}>
+                            <Text style={{ color: '#00ffcc', fontWeight: 'bold', fontSize: 12 }}>✏️ Editar</Text>
+                          </TouchableOpacity>
+                        )}
+                        {(currentRole === 'pastor' || isMyPrayer) && (
+                          <TouchableOpacity onPress={() => handleDeletePrayer(p.id)}>
+                            <Text style={{ color: '#ff0055', fontWeight: 'bold' }}>✕</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </View>
+
+                    {isEditingThis ? (
+                      <View style={{ marginTop: 8 }}>
+                        <TextInput 
+                          style={[styles.input, { height: 70, marginBottom: 6 }]} 
+                          value={editingPrayerText} 
+                          onChangeText={setEditingPrayerText} 
+                          multiline 
+                        />
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                          <TouchableOpacity 
+                            style={[styles.actionBtn, { backgroundColor: '#374151', flex: 1, padding: 8 }]} 
+                            onPress={() => setEditingPrayerId(null)}
+                          >
+                            <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>Cancelar</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity 
+                            style={[styles.actionBtn, { flex: 1, padding: 8 }]} 
+                            onPress={() => handleSaveEditedPrayer(p.id)}
+                          >
+                            <Text style={{ color: '#0b0f19', fontSize: 12, fontWeight: 'bold' }}>Guardar</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ) : (
+                      <Text style={styles.cardSub}>{p.request}</Text>
+                    )}
+                    
+                    <View style={styles.prayerActionRow}>
+                      <TouchableOpacity style={styles.supportBtn} onPress={() => handleSupportPrayer(p)}>
+                        <Text style={styles.supportBtnText}>🙏 Me uno en oración ({p.count || 0})</Text>
+                      </TouchableOpacity>
+                      
+                      {currentRole === 'pastor' && (
+                        <TouchableOpacity style={styles.statusToggleBtn} onPress={() => togglePrayerStatus(p)}>
+                          <Text style={styles.statusToggleText}>
+                            {p.status === 'answered' ? '🔄 Marcar en Oración' : '✅ Marcar Respondida'}
+                          </Text>
+                        </TouchableOpacity>
                       )}
                     </View>
-                    {currentRole === 'pastor' && (
-                      <TouchableOpacity onPress={() => handleDeletePrayer(p.id)}>
-                        <Text style={{ color: '#ff0055', fontWeight: 'bold' }}>✕</Text>
-                      </TouchableOpacity>
-                    )}
                   </View>
-                  <Text style={styles.cardSub}>{p.request}</Text>
-                  
-                  <View style={styles.prayerActionRow}>
-                    <TouchableOpacity style={styles.supportBtn} onPress={() => handleSupportPrayer(p)}>
-                      <Text style={styles.supportBtnText}>🙏 Me uno en oración ({p.count || 0})</Text>
-                    </TouchableOpacity>
-                    
-                    {currentRole === 'pastor' && (
-                      <TouchableOpacity style={styles.statusToggleBtn} onPress={() => togglePrayerStatus(p)}>
-                        <Text style={styles.statusToggleText}>
-                          {p.status === 'answered' ? '🔄 Marcar en Oración' : '✅ Marcar Respondida'}
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                </View>
-              ))}
+                );
+              })}
             </ScrollView>
           )}
 
@@ -981,7 +1020,6 @@ export default function App() {
                       </View>
                     </View>
 
-                    {/* Interruptor para mostrar u ocultar en el inicio */}
                     <View style={styles.switchRowInside}>
                       <Text style={{ color: '#d1d5db', fontSize: 12 }}>Visible en pantalla de inicio:</Text>
                       <Switch
@@ -1113,7 +1151,7 @@ const styles = StyleSheet.create({
   dashboardWelcomeTitle: { fontSize: 18, fontWeight: 'bold', color: '#ffffff', textAlign: 'center', marginBottom: 4 },
   dashboardWelcomeSub: { fontSize: 12, color: '#9ca3af', textAlign: 'center' },
   dashboardGrid: { gap: 12 },
-  desktopDashboardGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  desktopDashboardGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-width' },
   dashboardCard: { backgroundColor: '#111827', padding: 18, borderRadius: 16, marginBottom: 12, borderWidth: 1.5, borderColor: '#1f2937' },
   dashboardCardIcon: { fontSize: 26, marginBottom: 8 },
   dashboardCardTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 4 },
@@ -1165,7 +1203,7 @@ const styles = StyleSheet.create({
   metricLabel: { fontSize: 12, color: '#9ca3af', fontWeight: '600' },
   metricValue: { fontSize: 18, fontWeight: 'bold', marginTop: 4 },
   daysScroll: { flexDirection: 'row', marginVertical: 8 },
-  dayBox: { width: 44, height: 48, backgroundColor: '#111827', justifyContent: 'center', alignItems: 'center', borderRadius: 10, borderWidth: 1.5, borderColor: '#1f2937', marginRight: 6 },
+  dayBox: { width: 44, height: 48, backgroundColor: '#111827', justifyContent: 'center', alignItems: 'center', borderRadius: 10, borderWidth: 1.5, borderColor: '#374151', marginRight: 6 },
   selectedDayBox: { backgroundColor: '#00ffcc', borderColor: '#00ffcc' },
   dayText: { fontSize: 14, fontWeight: 'bold', color: '#d1d5db' },
   selectedDayText: { color: '#0b0f19' },
