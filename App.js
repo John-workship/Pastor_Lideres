@@ -27,16 +27,13 @@ if (Platform.OS !== 'web') {
 export default function App() {
   const [currentRole, setCurrentRole] = useState(null);
   
-  // Modales de inicio
   const [showGeneralModal, setShowGeneralModal] = useState(false);
   const [showAdminSelectionModal, setShowAdminSelectionModal] = useState(false);
 
-  // Formulario General
   const [generalFirstName, setGeneralFirstName] = useState('');
   const [generalLastName, setGeneralLastName] = useState('');
   const [activeGeneralUsers, setActiveGeneralUsers] = useState([]);
 
-  // Formulario Administrativo
   const [targetRoleToLogin, setTargetRoleToLogin] = useState(null);
   const [passwordInput, setPasswordInput] = useState('');
   
@@ -143,7 +140,11 @@ export default function App() {
   const [newFinanceLabel, setNewFinanceLabel] = useState('');
   const [newFinanceAmount, setNewFinanceAmount] = useState('');
 
+  // Estados para el calendario de mes en cuadrícula
+  const [currentMonth, setCurrentMonth] = useState('2026-11'); // '2026-11' o '2026-12'
   const [selectedDay, setSelectedDay] = useState('2026-11-05');
+  const [showDayModal, setShowDayModal] = useState(false);
+
   const [eventsList, setEventsList] = useState([]);
   const [showEventForm, setShowEventForm] = useState(false);
   const [editingEventId, setEditingEventId] = useState(null);
@@ -435,8 +436,10 @@ export default function App() {
     await supabase.from('events').delete().eq('id', String(id));
   };
 
+  // Generadores de días del mes en formato cuadrícula
   const novDays = Array.from({ length: 30 }, (_, i) => `2026-11-${String(i + 1).padStart(2, '0')}`);
   const decDays = Array.from({ length: 31 }, (_, i) => `2026-12-${String(i + 1).padStart(2, '0')}`);
+  const currentDaysList = currentMonth === '2026-11' ? novDays : decDays;
 
   const userDisplayName = generalFirstName && generalLastName 
     ? `${generalFirstName} ${generalLastName}` 
@@ -450,7 +453,6 @@ export default function App() {
           <Text style={styles.welcomeTitle}>Portal Congregacional</Text>
           <Text style={styles.welcomeSubtitle}>Selecciona tu modo de ingreso para continuar</Text>
 
-          {/* Botón 1: Ingreso a la Congregación */}
           <TouchableOpacity 
             style={styles.welcomePublicBtn} 
             onPress={() => { setGeneralFirstName(''); setGeneralLastName(''); setShowGeneralModal(true); }}
@@ -459,7 +461,6 @@ export default function App() {
             <Text style={styles.welcomePublicBtnSub}>Transmisión y Red de Oración (Sin contraseña)</Text>
           </TouchableOpacity>
 
-          {/* Botón 2: Único Botón de Accesos Administrativos */}
           <TouchableOpacity 
             style={styles.welcomeAdminBtn} 
             onPress={() => { setTargetRoleToLogin(null); setPasswordInput(''); setShowAdminSelectionModal(true); }}
@@ -469,7 +470,6 @@ export default function App() {
           </TouchableOpacity>
         </View>
 
-        {/* Modal de ingreso para la Congregación General */}
         <Modal visible={showGeneralModal} transparent animationType="fade">
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
@@ -512,13 +512,11 @@ export default function App() {
           </View>
         </Modal>
 
-        {/* Modal de Selección e Ingreso Administrativo Unificado */}
         <Modal visible={showAdminSelectionModal} transparent animationType="fade">
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               
               {targetRoleToLogin === null ? (
-                // Vista 1: Lista de roles habilitados por el Pastor
                 <>
                   <Text style={styles.modalTitle}>🔐 Selecciona tu Cargo</Text>
                   <Text style={styles.modalSub}>Elige tu perfil administrativo para continuar:</Text>
@@ -544,7 +542,6 @@ export default function App() {
                   </TouchableOpacity>
                 </>
               ) : (
-                // Vista 2: Ingreso de clave para el rol seleccionado
                 <>
                   <Text style={styles.modalTitle}>
                     🔐 Clave de Acceso: {adminRoles.find(r => r.id === targetRoleToLogin)?.name?.toUpperCase()}
@@ -959,101 +956,145 @@ export default function App() {
           {activeTab === 'services' && currentRole !== 'general' && (
             <ScrollView style={styles.content}>
               <Text style={styles.sectionTitle}>📅 Calendario de Cultos</Text>
-              
-              <Text style={styles.cardSub}>Noviembre 2026</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.daysScroll}>
-                {novDays.map((dayStr) => {
-                  const hasEvent = eventsList.some(e => e.date === dayStr);
+
+              {/* Pestañas para alternar entre Meses */}
+              <View style={styles.monthSelectorRow}>
+                <TouchableOpacity 
+                  style={[styles.monthTabBtn, currentMonth === '2026-11' && styles.activeMonthTab]} 
+                  onPress={() => setCurrentMonth('2026-11')}
+                >
+                  <Text style={[styles.monthTabText, currentMonth === '2026-11' && styles.activeMonthTabText]}>Noviembre 2026</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={[styles.monthTabBtn, currentMonth === '2026-12' && styles.activeMonthTab]} 
+                  onPress={() => setCurrentMonth('2026-12')}
+                >
+                  <Text style={[styles.monthTabText, currentMonth === '2026-12' && styles.activeMonthTabText]}>Diciembre 2026</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Vista Cuadrícula de Calendario Compacto */}
+              <View style={styles.calendarGrid}>
+                {currentDaysList.map((dayStr) => {
+                  const dayEvents = eventsList.filter(e => e.date === dayStr);
+                  const hasEvent = dayEvents.length > 0;
+                  const dayNumber = dayStr.split('-')[2];
+
                   return (
-                    <TouchableOpacity key={dayStr} style={[styles.dayBox, selectedDay === dayStr && styles.selectedDayBox]} onPress={() => setSelectedDay(dayStr)}>
-                      <Text style={[styles.dayText, selectedDay === dayStr && styles.selectedDayText]}>{dayStr.split('-')[2]}</Text>
-                      {hasEvent && <View style={[styles.eventDot, selectedDay === dayStr && styles.selectedEventDot]} />}
+                    <TouchableOpacity 
+                      key={dayStr} 
+                      style={[styles.calendarCell, hasEvent && styles.cellWithEvent]} 
+                      onPress={() => {
+                        setSelectedDay(dayStr);
+                        setShowDayModal(true);
+                      }}
+                    >
+                      <Text style={styles.cellDayNumber}>{dayNumber}</Text>
+                      {hasEvent && (
+                        <View style={styles.cellEventIndicator}>
+                          <Text style={styles.cellEventIndicatorText}>{dayEvents.length}</Text>
+                        </View>
+                      )}
                     </TouchableOpacity>
                   );
                 })}
-              </ScrollView>
-              
-              <View style={{ marginTop: 12 }}>
-                <Text style={styles.cardSub}>Diciembre 2026</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.daysScroll}>
-                  {decDays.map((dayStr) => {
-                    const hasEvent = eventsList.some(e => e.date === dayStr);
-                    return (
-                      <TouchableOpacity key={dayStr} style={[styles.dayBox, selectedDay === dayStr && styles.selectedDayBox]} onPress={() => setSelectedDay(dayStr)}>
-                        <Text style={[styles.dayText, selectedDay === dayStr && styles.selectedDayText]}>{dayStr.split('-')[2]}</Text>
-                        {hasEvent && <View style={[styles.eventDot, selectedDay === dayStr && styles.selectedEventDot]} />}
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
               </View>
 
-              <View style={styles.selectedDayHeader}>
-                <Text style={styles.sectionTitle}>Eventos del {selectedDay}</Text>
-                {(currentRole === 'pastor' || currentRole === 'secretario') && (
-                  <TouchableOpacity style={styles.smallAddBtn} onPress={() => {
-                    setEditingEventId(null);
-                    setNewEventTitle('');
-                    setNewEventTime('');
-                    setNewEventDetails('');
-                    setShowEventForm(!showEventForm);
-                  }}>
-                    <Text style={styles.smallAddText}>{showEventForm ? '✕ Cancelar' : '➕ Agregar'}</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
+              <Text style={{ color: '#9ca3af', fontSize: 11, textAlign: 'center', marginTop: 10 }}>
+                💡 Toca cualquier día en la cuadrícula para ver o agregar sus eventos.
+              </Text>
 
-              {showEventForm && (currentRole === 'pastor' || currentRole === 'secretario') && (
-                <View style={styles.addSedeCard}>
-                  <TextInput style={styles.input} placeholder="Título del Evento" placeholderTextColor="#666" value={newEventTitle} onChangeText={setNewEventTitle} />
-                  <TextInput style={styles.input} placeholder="Hora (Ej: 7:00 PM)" placeholderTextColor="#666" value={newEventTime} onChangeText={setNewEventTime} />
-                  <TextInput style={styles.input} placeholder="Detalles" placeholderTextColor="#666" value={newEventDetails} onChangeText={setNewEventDetails} />
-                  <TouchableOpacity style={styles.actionBtn} onPress={handleSaveEvent}>
-                    <Text style={styles.actionBtnText}>{editingEventId ? 'Actualizar Evento' : 'Guardar Evento'}</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {eventsList.filter(e => e.date === selectedDay).length > 0 ? (
-                eventsList.filter(e => e.date === selectedDay).map(ev => (
-                  <View key={ev.id} style={styles.card}>
+              {/* Modal Desplegable al presionar un día del calendario */}
+              <Modal visible={showDayModal} transparent animationType="slide">
+                <View style={styles.modalOverlay}>
+                  <View style={[styles.modalContent, { maxHeight: '80%' }]}>
                     <View style={styles.cardHeaderRow}>
-                      <Text style={styles.cardTitle}>⏰ {ev.time} - {ev.title}</Text>
+                      <Text style={styles.modalTitle}>📅 Eventos del {selectedDay}</Text>
+                      <TouchableOpacity onPress={() => setShowDayModal(false)}>
+                        <Text style={{ color: '#ff0055', fontWeight: 'bold', fontSize: 16 }}>✕</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    <ScrollView style={{ marginVertical: 10 }}>
                       {(currentRole === 'pastor' || currentRole === 'secretario') && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                          <TouchableOpacity 
-                            style={{ marginRight: 12 }}
-                            onPress={() => {
-                              setEditingEventId(ev.id);
-                              setNewEventTitle(ev.title);
-                              setNewEventTime(ev.time);
-                              setNewEventDetails(ev.details);
-                              setShowEventForm(true);
-                            }}
-                          >
-                            <Text style={{ color: '#00ffcc', fontWeight: 'bold' }}>✏️ Editar</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity onPress={() => handleDeleteEvent(ev.id)}>
-                            <Text style={{ color: '#ff0055', fontWeight: 'bold' }}>✕ Eliminar</Text>
+                        <TouchableOpacity 
+                          style={[styles.addSedeToggleBtn, { marginBottom: 12 }]} 
+                          onPress={() => {
+                            setEditingEventId(null);
+                            setNewEventTitle('');
+                            setNewEventTime('');
+                            setNewEventDetails('');
+                            setShowEventForm(!showEventForm);
+                          }}
+                        >
+                          <Text style={styles.addSedeToggleText}>{showEventForm ? '✕ Cancelar' : '➕ Agregar Evento en este Día'}</Text>
+                        </TouchableOpacity>
+                      )}
+
+                      {showEventForm && (currentRole === 'pastor' || currentRole === 'secretario') && (
+                        <View style={styles.addSedeCard}>
+                          <TextInput style={styles.input} placeholder="Título del Evento" placeholderTextColor="#666" value={newEventTitle} onChangeText={setNewEventTitle} />
+                          <TextInput style={styles.input} placeholder="Hora (Ej: 7:00 PM)" placeholderTextColor="#666" value={newEventTime} onChangeText={setNewEventTime} />
+                          <TextInput style={styles.input} placeholder="Detalles" placeholderTextColor="#666" value={newEventDetails} onChangeText={setNewEventDetails} />
+                          <TouchableOpacity style={styles.actionBtn} onPress={handleSaveEvent}>
+                            <Text style={styles.actionBtnText}>{editingEventId ? 'Actualizar Evento' : 'Guardar Evento'}</Text>
                           </TouchableOpacity>
                         </View>
                       )}
-                    </View>
-                    <Text style={styles.cardSub}>{ev.details}</Text>
+
+                      {eventsList.filter(e => e.date === selectedDay).length > 0 ? (
+                        eventsList.filter(e => e.date === selectedDay).map(ev => (
+                          <View key={ev.id} style={styles.card}>
+                            <View style={styles.cardHeaderRow}>
+                              <Text style={styles.cardTitle}>⏰ {ev.time} - {ev.title}</Text>
+                              {(currentRole === 'pastor' || currentRole === 'secretario') && (
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                  <TouchableOpacity 
+                                    style={{ marginRight: 12 }}
+                                    onPress={() => {
+                                      setEditingEventId(ev.id);
+                                      setNewEventTitle(ev.title);
+                                      setNewEventTime(ev.time);
+                                      setNewEventDetails(ev.details);
+                                      setShowEventForm(true);
+                                    }}
+                                  >
+                                    <Text style={{ color: '#00ffcc', fontWeight: 'bold' }}>✏️ Editar</Text>
+                                  </TouchableOpacity>
+                                  <TouchableOpacity onPress={() => handleDeleteEvent(ev.id)}>
+                                    <Text style={{ color: '#ff0055', fontWeight: 'bold' }}>✕</Text>
+                                  </TouchableOpacity>
+                                </View>
+                              )}
+                            </View>
+                            <Text style={styles.cardSub}>{ev.details}</Text>
+                          </View>
+                        ))
+                      ) : (
+                        <View style={styles.card}>
+                          <Text style={[styles.cardSub, { textAlign: 'center' }]}>No hay eventos programados para este día.</Text>
+                        </View>
+                      )}
+                    </ScrollView>
+
+                    <TouchableOpacity 
+                      style={[styles.actionBtn, { backgroundColor: '#374151', marginTop: 10 }]} 
+                      onPress={() => setShowDayModal(false)}
+                    >
+                      <Text style={{ color: '#fff', fontWeight: 'bold' }}>Cerrar</Text>
+                    </TouchableOpacity>
                   </View>
-                ))
-              ) : (
-                <View style={styles.card}>
-                  <Text style={[styles.cardSub, { textAlign: 'center' }]}>No hay eventos para este día.</Text>
                 </View>
-              )}
+              </Modal>
+
             </ScrollView>
           )}
 
           {activeTab === 'users' && currentRole === 'pastor' && (
             <ScrollView style={styles.content}>
               <Text style={styles.sectionTitle}>🔐 Gestión de Accesos y Visibilidad</Text>
-              <Text style={styles.cardSub}>Activa el interruptor para hacer visible un perfil en la pantalla de inicio, o modifícalo según prefieras:</Text>
+              <Text style={styles.cardSub}>Activa el interruptor para hacer visible un perfil en el menú administrativo:</Text>
 
               {adminRoles.map((role) => {
                 const isEditing = editingRoleId === role.id;
@@ -1264,14 +1305,21 @@ const styles = StyleSheet.create({
   metricCard: { width: '48%', backgroundColor: '#111827', padding: 14, borderRadius: 14, borderWidth: 1.5, borderColor: '#1f2937', marginBottom: 10 },
   metricLabel: { fontSize: 12, color: '#9ca3af', fontWeight: '600' },
   metricValue: { fontSize: 18, fontWeight: 'bold', marginTop: 4 },
-  daysScroll: { flexDirection: 'row', marginVertical: 8 },
-  dayBox: { width: 44, height: 48, backgroundColor: '#111827', justifyContent: 'center', alignItems: 'center', borderRadius: 10, borderWidth: 1.5, borderColor: '#374151', marginRight: 6 },
-  selectedDayBox: { backgroundColor: '#00ffcc', borderColor: '#00ffcc' },
-  dayText: { fontSize: 14, fontWeight: 'bold', color: '#d1d5db' },
-  selectedDayText: { color: '#0b0f19' },
-  selectedDayHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, marginBottom: 10 },
-  smallAddBtn: { backgroundColor: '#1f2937', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#374151' },
-  smallAddText: { color: '#00ffcc', fontWeight: 'bold', fontSize: 12 },
+  
+  // Estilos para el nuevo Calendario en Cuadrícula
+  monthSelectorRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
+  monthTabBtn: { flex: 1, backgroundColor: '#1f2937', padding: 10, borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: '#374151' },
+  activeMonthTab: { backgroundColor: '#00ffcc', borderColor: '#00ffcc' },
+  monthTabText: { color: '#d1d5db', fontWeight: 'bold', fontSize: 13 },
+  activeMonthTabText: { color: '#0b0f19' },
+
+  calendarGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' },
+  calendarCell: { width: '13%', aspectRatio: 1, backgroundColor: '#111827', justifyContent: 'center', alignItems: 'center', borderRadius: 8, borderWidth: 1, borderColor: '#374151' },
+  cellWithEvent: { borderColor: '#00ffcc', backgroundColor: '#0b1f1a' },
+  cellDayNumber: { color: '#ffffff', fontSize: 13, fontWeight: 'bold' },
+  cellEventIndicator: { position: 'absolute', bottom: 2, right: 2, backgroundColor: '#00ffcc', width: 14, height: 14, borderRadius: 7, justifyContent: 'center', alignItems: 'center' },
+  cellEventIndicatorText: { color: '#0b0f19', fontSize: 9, fontWeight: 'bold' },
+
   activePrayerBadge: { backgroundColor: '#374151', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
   activePrayerBadgeText: { color: '#fbbf24', fontSize: 10, fontWeight: 'bold' },
   answeredBadge: { backgroundColor: '#064e3b', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
@@ -1280,7 +1328,5 @@ const styles = StyleSheet.create({
   supportBtn: { backgroundColor: '#1f2937', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#374151' },
   supportBtnText: { color: '#00ffcc', fontSize: 12, fontWeight: 'bold' },
   statusToggleBtn: { paddingHorizontal: 8, paddingVertical: 6 },
-  statusToggleText: { color: '#9ca3af', fontSize: 12, fontWeight: '600' },
-  eventDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#00ffcc', marginTop: 2 },
-  selectedEventDot: { backgroundColor: '#0b0f19' }
+  statusToggleText: { color: '#9ca3af', fontSize: 12, fontWeight: '600' }
 });
