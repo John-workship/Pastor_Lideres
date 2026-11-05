@@ -27,13 +27,16 @@ if (Platform.OS !== 'web') {
 export default function App() {
   const [currentRole, setCurrentRole] = useState(null);
   
+  // Modales de inicio
   const [showGeneralModal, setShowGeneralModal] = useState(false);
+  const [showAdminSelectionModal, setShowAdminSelectionModal] = useState(false);
+
+  // Formulario General
   const [generalFirstName, setGeneralFirstName] = useState('');
   const [generalLastName, setGeneralLastName] = useState('');
-  
-  // Lista para almacenar los nombres de usuarios generales conectados en esta sesión y evitar duplicados
   const [activeGeneralUsers, setActiveGeneralUsers] = useState([]);
 
+  // Formulario Administrativo
   const [targetRoleToLogin, setTargetRoleToLogin] = useState(null);
   const [passwordInput, setPasswordInput] = useState('');
   
@@ -200,6 +203,7 @@ export default function App() {
       setActiveTab('home');
       setTargetRoleToLogin(null);
       setPasswordInput('');
+      setShowAdminSelectionModal(false);
     } else {
       alert('❌ Clave de acceso incorrecta. Inténtalo de nuevo.');
     }
@@ -216,13 +220,11 @@ export default function App() {
 
     const fullNameKey = `${firstNameClean.toLowerCase()} ${lastNameClean.toLowerCase()}`;
 
-    // Verificamos si este nombre y apellido ya se encuentran registrados en la sesión activa
     if (activeGeneralUsers.includes(fullNameKey)) {
       alert('⚠️ Ya existe un usuario activo con este mismo Nombre y Apellido. Por favor verifica tus datos.');
       return;
     }
 
-    // Agregamos el usuario a la lista de activos
     setActiveGeneralUsers(prev => [...prev, fullNameKey]);
     setCurrentRole('general');
     setActiveTab('home');
@@ -448,33 +450,26 @@ export default function App() {
           <Text style={styles.welcomeTitle}>Portal Congregacional</Text>
           <Text style={styles.welcomeSubtitle}>Selecciona tu modo de ingreso para continuar</Text>
 
+          {/* Botón 1: Ingreso a la Congregación */}
           <TouchableOpacity 
             style={styles.welcomePublicBtn} 
             onPress={() => { setGeneralFirstName(''); setGeneralLastName(''); setShowGeneralModal(true); }}
           >
             <Text style={styles.welcomePublicBtnText}>🌐 Ingresar a la Congregación</Text>
-            <Text style={styles.welcomePublicBtnSub}>Transmisión y Red de Oración (Requiere Nombre y Apellido)</Text>
+            <Text style={styles.welcomePublicBtnSub}>Transmisión y Red de Oración (Sin contraseña)</Text>
           </TouchableOpacity>
 
-          <View style={styles.dividerRow}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>ACCESOS ADMINISTRATIVOS</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          <View style={styles.adminButtonsGrid}>
-            {adminRoles.filter(role => role.isVisible).map(role => (
-              <TouchableOpacity 
-                key={role.id}
-                style={styles.adminRoleBtn} 
-                onPress={() => { setTargetRoleToLogin(role.id); setPasswordInput(''); }}
-              >
-                <Text style={styles.adminRoleText}>{role.icon} {role.name} (Clave)</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          {/* Botón 2: Único Botón de Accesos Administrativos */}
+          <TouchableOpacity 
+            style={styles.welcomeAdminBtn} 
+            onPress={() => { setTargetRoleToLogin(null); setPasswordInput(''); setShowAdminSelectionModal(true); }}
+          >
+            <Text style={styles.welcomeAdminBtnText}>🔐 Accesos Administrativos</Text>
+            <Text style={styles.welcomeAdminBtnSub}>Pastor, Secretario(a), Tesorero(a) y Líderes</Text>
+          </TouchableOpacity>
         </View>
 
+        {/* Modal de ingreso para la Congregación General */}
         <Modal visible={showGeneralModal} transparent animationType="fade">
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
@@ -517,39 +512,73 @@ export default function App() {
           </View>
         </Modal>
 
-        <Modal visible={targetRoleToLogin !== null} transparent animationType="fade">
+        {/* Modal de Selección e Ingreso Administrativo Unificado */}
+        <Modal visible={showAdminSelectionModal} transparent animationType="fade">
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>
-                🔐 Clave de Acceso: {adminRoles.find(r => r.id === targetRoleToLogin)?.name?.toUpperCase()}
-              </Text>
-              <Text style={styles.modalSub}>Introduce la clave asignada por el Pastor:</Text>
               
-              <TextInput 
-                style={styles.input} 
-                placeholder="Contraseña" 
-                placeholderTextColor="#666" 
-                secureTextEntry 
-                value={passwordInput} 
-                onChangeText={setPasswordInput} 
-                autoFocus
-              />
+              {targetRoleToLogin === null ? (
+                // Vista 1: Lista de roles habilitados por el Pastor
+                <>
+                  <Text style={styles.modalTitle}>🔐 Selecciona tu Cargo</Text>
+                  <Text style={styles.modalSub}>Elige tu perfil administrativo para continuar:</Text>
+                  
+                  <View style={{ gap: 10, marginVertical: 10 }}>
+                    {adminRoles.filter(role => role.isVisible).map(role => (
+                      <TouchableOpacity 
+                        key={role.id}
+                        style={styles.adminRoleBtnInside} 
+                        onPress={() => { setTargetRoleToLogin(role.id); setPasswordInput(''); }}
+                      >
+                        <Text style={styles.adminRoleTextInside}>{role.icon} {role.name}</Text>
+                        <Text style={{ color: '#00ffcc', fontSize: 12 }}>Seleccionar ➔</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
 
-              <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
-                <TouchableOpacity 
-                  style={[styles.actionBtn, { backgroundColor: '#374151', flex: 1 }]} 
-                  onPress={() => setTargetRoleToLogin(null)}
-                >
-                  <Text style={{ color: '#fff', fontWeight: 'bold' }}>Cancelar</Text>
-                </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[styles.actionBtn, { backgroundColor: '#374151', marginTop: 10 }]} 
+                    onPress={() => setShowAdminSelectionModal(false)}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: 'bold' }}>Cancelar</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                // Vista 2: Ingreso de clave para el rol seleccionado
+                <>
+                  <Text style={styles.modalTitle}>
+                    🔐 Clave de Acceso: {adminRoles.find(r => r.id === targetRoleToLogin)?.name?.toUpperCase()}
+                  </Text>
+                  <Text style={styles.modalSub}>Introduce la contraseña asignada:</Text>
+                  
+                  <TextInput 
+                    style={styles.input} 
+                    placeholder="Contraseña" 
+                    placeholderTextColor="#666" 
+                    secureTextEntry 
+                    value={passwordInput} 
+                    onChangeText={setPasswordInput} 
+                    autoFocus
+                  />
 
-                <TouchableOpacity 
-                  style={[styles.actionBtn, { flex: 1 }]} 
-                  onPress={handleAdminLogin}
-                >
-                  <Text style={styles.actionBtnText}>Ingresar</Text>
-                </TouchableOpacity>
-              </View>
+                  <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+                    <TouchableOpacity 
+                      style={[styles.actionBtn, { backgroundColor: '#374151', flex: 1 }]} 
+                      onPress={() => setTargetRoleToLogin(null)}
+                    >
+                      <Text style={{ color: '#fff', fontWeight: 'bold' }}>⇦ Volver</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity 
+                      style={[styles.actionBtn, { flex: 1 }]} 
+                      onPress={handleAdminLogin}
+                    >
+                      <Text style={styles.actionBtnText}>Ingresar</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+
             </View>
           </View>
         </Modal>
@@ -1052,7 +1081,7 @@ export default function App() {
                     </View>
 
                     <View style={styles.switchRowInside}>
-                      <Text style={{ color: '#d1d5db', fontSize: 12 }}>Visible en pantalla de inicio:</Text>
+                      <Text style={{ color: '#d1d5db', fontSize: 12 }}>Visible en menú administrativo:</Text>
                       <Switch
                         trackColor={{ false: '#374151', true: '#00ffcc' }}
                         thumbColor={role.isVisible ? '#0b0f19' : '#9ca3af'}
@@ -1122,7 +1151,7 @@ export default function App() {
                     placeholder="Clave de acceso" 
                     placeholderTextColor="#666" 
                     value={newRoleKey} 
-                    onChangeText={newRoleKey} 
+                    onChangeText={setNewRoleKey} 
                   />
 
                   <TouchableOpacity style={styles.actionBtn} onPress={handleAddNewRole}>
@@ -1147,15 +1176,17 @@ const styles = StyleSheet.create({
   welcomeEmoji: { fontSize: 44, marginBottom: 10 },
   welcomeTitle: { fontSize: 24, fontWeight: 'bold', color: '#ffffff', marginBottom: 6, textAlign: 'center' },
   welcomeSubtitle: { fontSize: 13, color: '#9ca3af', textAlign: 'center', marginBottom: 24 },
-  welcomePublicBtn: { backgroundColor: '#00ffcc', width: '100%', padding: 16, borderRadius: 14, alignItems: 'center', marginBottom: 20 },
+  
+  welcomePublicBtn: { backgroundColor: '#00ffcc', width: '100%', padding: 16, borderRadius: 14, alignItems: 'center', marginBottom: 14 },
   welcomePublicBtnText: { color: '#0b0f19', fontSize: 15, fontWeight: 'bold' },
   welcomePublicBtnSub: { color: '#0b0f19', fontSize: 11, fontWeight: '600', opacity: 0.8, marginTop: 2 },
-  dividerRow: { flexDirection: 'row', alignItems: 'center', width: '100%', marginVertical: 16 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: '#374151' },
-  dividerText: { color: '#9ca3af', fontSize: 10, fontWeight: 'bold', marginHorizontal: 10 },
-  adminButtonsGrid: { width: '100%', gap: 10 },
-  adminRoleBtn: { backgroundColor: '#1f2937', padding: 12, borderRadius: 12, alignItems: 'center', borderWidth: 1.5, borderColor: '#374151' },
-  adminRoleText: { color: '#ffffff', fontSize: 13, fontWeight: 'bold' },
+  
+  welcomeAdminBtn: { backgroundColor: '#1f2937', width: '100%', padding: 16, borderRadius: 14, alignItems: 'center', borderWidth: 1.5, borderColor: '#374151' },
+  welcomeAdminBtnText: { color: '#ffffff', fontSize: 15, fontWeight: 'bold' },
+  welcomeAdminBtnSub: { color: '#9ca3af', fontSize: 11, fontWeight: '500', marginTop: 2 },
+
+  adminRoleBtnInside: { backgroundColor: '#1f2937', padding: 14, borderRadius: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1.5, borderColor: '#374151' },
+  adminRoleTextInside: { color: '#ffffff', fontSize: 14, fontWeight: 'bold' },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   modalContent: { backgroundColor: '#111827', width: '100%', maxWidth: 360, padding: 22, borderRadius: 16, borderWidth: 2, borderColor: '#00ffcc' },
