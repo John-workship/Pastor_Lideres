@@ -113,10 +113,11 @@ export default function App() {
   const [newFinanceLabel, setNewFinanceLabel] = useState('');
   const [newFinanceAmount, setNewFinanceAmount] = useState('');
 
-  // Calendario
+  // Calendario (Actualizado con edición de eventos)
   const [selectedDay, setSelectedDay] = useState('2026-11-05');
   const [eventsList, setEventsList] = useState([]);
   const [showEventForm, setShowEventForm] = useState(false);
+  const [editingEventId, setEditingEventId] = useState(null);
   const [newEventTitle, setNewEventTitle] = useState('');
   const [newEventTime, setNewEventTime] = useState('');
   const [newEventDetails, setNewEventDetails] = useState('');
@@ -290,19 +291,27 @@ export default function App() {
     await supabase.from('finance').delete().eq('id', String(id));
   };
 
+  // Lógica de Eventos (Crear y Editar con Supabase)
   const handleSaveEvent = async () => {
     if (currentRole !== 'pastor' && currentRole !== 'secretario') return;
     if (!newEventTitle.trim()) return;
+
     const payload = {
-      id: String(Date.now()),
+      id: editingEventId ? String(editingEventId) : String(Date.now()),
       date: selectedDay,
       title: newEventTitle.trim(),
       time: newEventTime.trim() || '6:00 PM',
       details: newEventDetails.trim() || ''
     };
-    setEventsList(prev => [...prev, payload]);
-    await supabase.from('events').insert([payload]);
-    setNewEventTitle(''); setNewEventTime(''); setNewEventDetails(''); setShowEventForm(false);
+
+    setEventsList(prev => editingEventId ? prev.map(e => e.id === payload.id ? payload : e) : [...prev, payload]);
+    await supabase.from('events').upsert([payload]);
+
+    setNewEventTitle(''); 
+    setNewEventTime(''); 
+    setNewEventDetails(''); 
+    setEditingEventId(null);
+    setShowEventForm(false);
   };
 
   const handleDeleteEvent = async (id) => {
@@ -365,14 +374,14 @@ export default function App() {
             setShowRoleSelector(false); 
             setActiveTab('live'); 
           }}>
-            <Text style={styles.roleItemText}>📋 2. Secretario(a) (Sin oración, finanzas ver)</Text>
+            <Text style={styles.roleItemText}>📋 2. Secretario(a) (Transmisión, Cultos, Comités)</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.roleItem} onPress={() => { 
             setCurrentRole('tesorero'); 
             setShowRoleSelector(false); 
             setActiveTab('finance'); 
           }}>
-            <Text style={styles.roleItemText}>💰 3. Tesorero(a) (Finanzas total + Vistas sin oración)</Text>
+            <Text style={styles.roleItemText}>💰 3. Tesorero(a) (Finanzas total + Vistas)</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.roleItem} onPress={() => { 
             setCurrentRole('general'); 
@@ -520,7 +529,7 @@ export default function App() {
             </ScrollView>
           )}
 
-          {/* MÓDULO DE PETICIONES DE ORACIÓN (Oculto para tesorero y secretario) */}
+          {/* MÓDULO DE PETICIONES DE ORACIÓN */}
           {activeTab === 'prayers' && currentRole !== 'tesorero' && currentRole !== 'secretario' && (
             <ScrollView style={styles.content}>
               <Text style={styles.sectionTitle}>🙏 Red de Oración Congregacional</Text>
@@ -685,7 +694,7 @@ export default function App() {
             </ScrollView>
           )}
 
-          {/* MÓDULO DE CULTOS */}
+          {/* MÓDULO DE CULTOS (Con opción de Editar Evento para Pastor y Secretario) */}
           {activeTab === 'services' && currentRole !== 'general' && (
             <ScrollView style={styles.content}>
               <Text style={styles.sectionTitle}>📅 Calendario de Cultos</Text>
@@ -721,7 +730,13 @@ export default function App() {
               <View style={styles.selectedDayHeader}>
                 <Text style={styles.sectionTitle}>Eventos del {selectedDay}</Text>
                 {(currentRole === 'pastor' || currentRole === 'secretario') && (
-                  <TouchableOpacity style={styles.smallAddBtn} onPress={() => setShowEventForm(!showEventForm)}>
+                  <TouchableOpacity style={styles.smallAddBtn} onPress={() => {
+                    setEditingEventId(null);
+                    setNewEventTitle('');
+                    setNewEventTime('');
+                    setNewEventDetails('');
+                    setShowEventForm(!showEventForm);
+                  }}>
                     <Text style={styles.smallAddText}>{showEventForm ? '✕ Cancelar' : '➕ Agregar'}</Text>
                   </TouchableOpacity>
                 )}
@@ -733,7 +748,7 @@ export default function App() {
                   <TextInput style={styles.input} placeholder="Hora (Ej: 7:00 PM)" placeholderTextColor="#666" value={newEventTime} onChangeText={setNewEventTime} />
                   <TextInput style={styles.input} placeholder="Detalles" placeholderTextColor="#666" value={newEventDetails} onChangeText={setNewEventDetails} />
                   <TouchableOpacity style={styles.actionBtn} onPress={handleSaveEvent}>
-                    <Text style={styles.actionBtnText}>Guardar Evento</Text>
+                    <Text style={styles.actionBtnText}>{editingEventId ? 'Actualizar Evento' : 'Guardar Evento'}</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -744,9 +759,23 @@ export default function App() {
                     <View style={styles.cardHeaderRow}>
                       <Text style={styles.cardTitle}>⏰ {ev.time} - {ev.title}</Text>
                       {(currentRole === 'pastor' || currentRole === 'secretario') && (
-                        <TouchableOpacity onPress={() => handleDeleteEvent(ev.id)}>
-                          <Text style={{ color: '#ff0055', fontWeight: 'bold' }}>✕ Eliminar</Text>
-                        </TouchableOpacity>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <TouchableOpacity 
+                            style={{ marginRight: 12 }}
+                            onPress={() => {
+                              setEditingEventId(ev.id);
+                              setNewEventTitle(ev.title);
+                              setNewEventTime(ev.time);
+                              setNewEventDetails(ev.details);
+                              setShowEventForm(true);
+                            }}
+                          >
+                            <Text style={{ color: '#00ffcc', fontWeight: 'bold' }}>✏️ Editar</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => handleDeleteEvent(ev.id)}>
+                            <Text style={{ color: '#ff0055', fontWeight: 'bold' }}>✕ Eliminar</Text>
+                          </TouchableOpacity>
+                        </View>
                       )}
                     </View>
                     <Text style={styles.cardSub}>{ev.details}</Text>
