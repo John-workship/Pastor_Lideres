@@ -27,11 +27,15 @@ if (Platform.OS !== 'web') {
 export default function App() {
   const [currentRole, setCurrentRole] = useState(null);
   
-  // Estado para el Modal de Contraseña Administrativa
+  // Estados para el Modal de Nombre (Invitado / General)
+  const [showGeneralModal, setShowGeneralModal] = useState(false);
+  const [generalUserName, setGeneralUserName] = useState('');
+
+  // Estados para el Modal de Contraseña Administrativa
   const [targetRoleToLogin, setTargetRoleToLogin] = useState(null);
   const [passwordInput, setPasswordInput] = useState('');
   
-  // Nuevas claves genéricas actualizadas
+  // Claves genéricas actualizadas
   const [accessKeys, setAccessKeys] = useState({
     pastor: '7777',
     secretario: '5555',
@@ -181,6 +185,12 @@ export default function App() {
     }
   };
 
+  const handleGeneralLogin = () => {
+    setCurrentRole('general');
+    setActiveTab('live');
+    setShowGeneralModal(false);
+  };
+
   const handleSaveSede = async () => {
     if (currentRole === 'tesorero' || currentRole === 'general') return;
     const finalName = newSedeName.trim() || 'Nueva Sede';
@@ -223,9 +233,13 @@ export default function App() {
   const addPrayer = async () => {
     if (newPrayerRequest.trim() === '') return;
     const newId = String(Date.now());
+    
+    // Si es general, toma el nombre digitado en el modal o "Anónimo"
+    const authorName = currentRole === 'general' ? (generalUserName.trim() || 'Anónimo') : (newPrayerName.trim() || 'Anónimo');
+
     const newObj = { 
       id: newId, 
-      name: newPrayerName.trim() || 'Anónimo', 
+      name: authorName, 
       request: newPrayerRequest.trim(),
       status: 'active',
       count: 1
@@ -347,7 +361,7 @@ export default function App() {
 
           <TouchableOpacity 
             style={styles.welcomePublicBtn} 
-            onPress={() => { setCurrentRole('general'); setActiveTab('live'); }}
+            onPress={() => { setGeneralUserName(''); setShowGeneralModal(true); }}
           >
             <Text style={styles.welcomePublicBtnText}>🌐 Ingresar a la Congregación</Text>
             <Text style={styles.welcomePublicBtnSub}>Transmisión, Peticiones y Comités (Sin contraseña)</Text>
@@ -383,6 +397,42 @@ export default function App() {
           </View>
         </View>
 
+        {/* MODAL PARA PEDIR NOMBRE AL INGRESAR COMO GENERAL */}
+        <Modal visible={showGeneralModal} transparent animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>👋 ¡Bienvenido a la Congregación!</Text>
+              <Text style={styles.modalSub}>Ingresa tu nombre o apodo para identificarte (Opcional):</Text>
+              
+              <TextInput 
+                style={styles.input} 
+                placeholder="Ej. María Gómez o Anónimo" 
+                placeholderTextColor="#666" 
+                value={generalUserName} 
+                onChangeText={setGeneralUserName} 
+                autoFocus
+              />
+
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+                <TouchableOpacity 
+                  style={[styles.actionBtn, { backgroundColor: '#374151', flex: 1 }]} 
+                  onPress={() => setShowGeneralModal(false)}
+                >
+                  <Text style={{ color: '#fff', fontWeight: 'bold' }}>Cancelar</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={[styles.actionBtn, { flex: 1 }]} 
+                  onPress={handleGeneralLogin}
+                >
+                  <Text style={styles.actionBtnText}>Entrar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* MODAL DE INGRESO DE CONTRASEÑA ADMINISTRATIVA */}
         <Modal visible={targetRoleToLogin !== null} transparent animationType="fade">
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
@@ -430,7 +480,7 @@ export default function App() {
           <View style={styles.roleSelectorWrapper}>
             <TouchableOpacity style={styles.roleButtonActive} onPress={() => setCurrentRole(null)}>
               <Text style={styles.roleButtonText}>
-                👤 {currentRole === 'pastor' ? 'Pastor' : currentRole === 'secretario' ? 'Secretario(a)' : currentRole === 'tesorero' ? 'Tesorero(a)' : 'Invitado'} (Cerrar Sesión ⇦)
+                👤 {currentRole === 'pastor' ? 'Pastor' : currentRole === 'secretario' ? 'Secretario(a)' : currentRole === 'tesorero' ? 'Tesorero(a)' : (generalUserName ? generalUserName : 'Invitado')} (Cerrar Sesión ⇦)
               </Text>
             </TouchableOpacity>
           </View>
@@ -602,10 +652,12 @@ export default function App() {
               <Text style={styles.sectionTitle}>🙏 Red de Oración Congregacional</Text>
               
               <View style={styles.addSedeCard}>
-                <TextInput style={styles.input} placeholder="Tu Nombre (Opcional)" placeholderTextColor="#666" value={newPrayerName} onChangeText={setNewPrayerName} />
+                {currentRole !== 'general' && (
+                  <TextInput style={styles.input} placeholder="Tu Nombre (Opcional)" placeholderTextColor="#666" value={newPrayerName} onChangeText={setNewPrayerName} />
+                )}
                 <TextInput style={[styles.input, { height: 80 }]} placeholder="Escribe tu motivo de oración..." placeholderTextColor="#666" multiline value={newPrayerRequest} onChangeText={setNewPrayerRequest} />
                 <TouchableOpacity style={styles.actionBtn} onPress={addPrayer}>
-                  <Text style={styles.actionBtnText}>Publicar Petición</Text>
+                  <Text style={styles.actionBtnText}>Publicar Petición {currentRole === 'general' && generalUserName ? `como ${generalUserName}` : ''}</Text>
                 </TouchableOpacity>
               </View>
 
