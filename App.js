@@ -33,19 +33,18 @@ export default function App() {
   const [targetRoleToLogin, setTargetRoleToLogin] = useState(null);
   const [passwordInput, setPasswordInput] = useState('');
   
-  // Lista dinámica de perfiles administrativos
+  // Lista de perfiles con la propiedad 'isVisible' para ocultar/mostrar en el inicio
   const [adminRoles, setAdminRoles] = useState([
-    { id: 'pastor', name: 'Pastor', key: '6789', icon: '📖' },
-    { id: 'secretario', name: 'Secretario(a)', key: '5555', icon: '📋' },
-    { id: 'tesorero', name: 'Tesorero(a)', key: '3333', icon: '💰' }
+    { id: 'pastor', name: 'Pastor', key: '6789', icon: '📖', isVisible: true },
+    { id: 'secretario', name: 'Secretario(a)', key: '5555', icon: '📋', isVisible: true },
+    { id: 'tesorero', name: 'Tesorero(a)', key: '3333', icon: '💰', isVisible: true },
+    { id: 'lideres', name: 'Líderes', key: '1234', icon: '👥', isVisible: false } // Inicia oculto por defecto
   ]);
 
-  // Estado para controlar qué perfil se está editando individualmente ('pastor', 'secretario', etc., o null)
   const [editingRoleId, setEditingRoleId] = useState(null);
   const [tempRoleName, setTempRoleName] = useState('');
   const [tempRoleKey, setTempRoleKey] = useState('');
 
-  // Control para mostrar el formulario de crear nuevo acceso
   const [showCreateNewRoleForm, setShowCreateNewRoleForm] = useState(false);
   const [newRoleName, setNewRoleName] = useState('');
   const [newRoleKey, setNewRoleKey] = useState('');
@@ -88,13 +87,22 @@ export default function App() {
         { key: 'finance', title: 'Tesorería (Visualización)', subtitle: 'Consulta los fondos y reportes financieros', icon: '💰', color: '#a78bfa' }
       ];
     }
+    // Perfil de Líderes u otros personalizados: acceso exclusivo a Comités y Calendario (y transmisión opcional si se desea)
+    if (currentRole === 'lideres' || (!['pastor', 'secretario', 'tesorero', 'general'].includes(currentRole) && currentRole !== null)) {
+      return [
+        { key: 'comites', title: 'Comités de Trabajo', subtitle: 'Consulta los comités y líderes de área', icon: '👥', color: '#fbbf24' },
+        { key: 'services', title: 'Calendario de Cultos', subtitle: 'Consulta la agenda y eventos programados', icon: '📋', color: '#a78bfa' },
+        { key: 'live', title: 'Transmisión en Vivo', subtitle: 'Sigue el culto en directo', icon: '📺', color: '#00ffcc' }
+      ];
+    }
+    // Menú completo del Pastor
     return [
       { key: 'live', title: 'Transmisión en Vivo', subtitle: 'Administra sedes y el reproductor en directo', icon: '📺', color: '#00ffcc' },
       { key: 'prayers', title: 'Red de Oración', subtitle: 'Gestiona peticiones y marca respondidas', icon: '🙏', color: '#34d399' },
       { key: 'comites', title: 'Comités de Trabajo', subtitle: 'Organiza líderes, comités y secretarios', icon: '👥', color: '#fbbf24' },
       { key: 'finance', title: 'Tesorería y Fondos', subtitle: 'Administra fondos, ofrendas y cuentas', icon: '💰', color: '#a78bfa' },
       { key: 'services', title: 'Calendario de Cultos', subtitle: 'Planifica la agenda de servicios y eventos', icon: '📋', color: '#f472b6' },
-      { key: 'users', title: 'Gestión de Accesos', subtitle: 'Modifica perfiles, nombres y claves', icon: '🔐', color: '#60a5fa' }
+      { key: 'users', title: 'Gestión de Accesos', subtitle: 'Modifica perfiles, visibilidad y claves', icon: '🔐', color: '#60a5fa' }
     ];
   };
 
@@ -209,7 +217,11 @@ export default function App() {
     }
     setAdminRoles(prev => prev.map(r => r.id === roleId ? { ...r, name: tempRoleName.trim(), key: tempRoleKey.trim() } : r));
     setEditingRoleId(null);
-    alert('✅ ¡Perfil actualizado y guardado con éxito!');
+    alert('✅ ¡Perfil actualizado con éxito!');
+  };
+
+  const handleToggleRoleVisibility = (roleId) => {
+    setAdminRoles(prev => prev.map(r => r.id === roleId ? { ...r, isVisible: !r.isVisible } : r));
   };
 
   const handleAddNewRole = () => {
@@ -223,11 +235,11 @@ export default function App() {
       return;
     }
 
-    setAdminRoles(prev => [...prev, { id: newId, name: newRoleName.trim(), key: newRoleKey.trim(), icon: '👤' }]);
+    setAdminRoles(prev => [...prev, { id: newId, name: newRoleName.trim(), key: newRoleKey.trim(), icon: '👥', isVisible: false }]);
     setNewRoleName('');
     setNewRoleKey('');
     setShowCreateNewRoleForm(false);
-    alert('✅ ¡Nuevo acceso creado con éxito!');
+    alert('✅ ¡Nuevo perfil de líderes creado (oculto por defecto)!');
   };
 
   const handleDeleteAdminRole = (roleId) => {
@@ -239,7 +251,7 @@ export default function App() {
   };
 
   const handleSaveSede = async () => {
-    if (currentRole === 'tesorero' || currentRole === 'general') return;
+    if (['tesorero', 'general', 'lideres'].includes(currentRole)) return;
     const finalName = newSedeName.trim() || 'Nueva Sede';
     let finalUrl = newSedeChannelUrl.trim();
 
@@ -315,14 +327,14 @@ export default function App() {
   };
 
   const togglePrayerStatus = async (item) => {
-    if (currentRole === 'general' || currentRole === 'tesorero' || currentRole === 'secretario') return;
+    if (['general', 'tesorero', 'secretario', 'lideres'].includes(currentRole)) return;
     const newStatus = item.status === 'answered' ? 'active' : 'answered';
     setPrayers(prev => prev.map(p => p.id === item.id ? { ...p, status: newStatus } : p));
     await supabase.from('prayers').update({ status: newStatus }).eq('id', item.id);
   };
 
   const handleDeletePrayer = async (id) => {
-    if (currentRole === 'tesorero' || currentRole === 'secretario') return;
+    if (['tesorero', 'secretario', 'lideres'].includes(currentRole)) return;
     if (currentRole === 'general' && !myLocalPrayerIds.includes(String(id))) return;
     setPrayers(prev => prev.filter(p => p.id !== String(id)));
     await supabase.from('prayers').delete().eq('id', String(id));
@@ -422,12 +434,13 @@ export default function App() {
 
           <View style={styles.dividerRow}>
             <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>ACCESOS ADMINISTRATIVOS (REQUIERE CLAVE)</Text>
+            <Text style={styles.dividerText}>ACCESOS ADMINISTRATIVOS</Text>
             <View style={styles.dividerLine} />
           </View>
 
           <View style={styles.adminButtonsGrid}>
-            {adminRoles.map(role => (
+            {/* Solo muestra en la pantalla de bienvenida los perfiles que tengan isVisible en true */}
+            {adminRoles.filter(role => role.isVisible).map(role => (
               <TouchableOpacity 
                 key={role.id}
                 style={styles.adminRoleBtn} 
@@ -685,7 +698,7 @@ export default function App() {
             </ScrollView>
           )}
 
-          {activeTab === 'prayers' && currentRole !== 'general' && (
+          {activeTab === 'prayers' && currentRole !== 'general' && currentRole !== 'lideres' && (
             <ScrollView style={styles.content}>
               <Text style={styles.sectionTitle}>🙏 Red de Oración Congregacional</Text>
               
@@ -695,83 +708,44 @@ export default function App() {
                 )}
                 <TextInput style={[styles.input, { height: 80 }]} placeholder="Escribe tu motivo de oración..." placeholderTextColor="#666" multiline value={newPrayerRequest} onChangeText={setNewPrayerRequest} />
                 <TouchableOpacity style={styles.actionBtn} onPress={addPrayer}>
-                  <Text style={styles.actionBtnText}>Publicar Petición {currentRole === 'general' && generalUserName ? `como ${generalUserName}` : ''}</Text>
+                  <Text style={styles.actionBtnText}>Publicar Petición</Text>
                 </TouchableOpacity>
               </View>
 
-              {prayers.map(p => {
-                const isMyPrayer = currentRole === 'general' && myLocalPrayerIds.includes(String(p.id));
-                const isEditingThis = editingPrayerId === p.id;
-
-                return (
-                  <View key={p.id} style={[styles.card, p.status === 'answered' && styles.answeredCard]}>
-                    <View style={styles.cardHeaderRow}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Text style={styles.cardTitle}>{p.name}</Text>
-                        {p.status === 'answered' ? (
-                          <View style={styles.answeredBadge}><Text style={styles.answeredBadgeText}>✨ RESPONDIDA</Text></View>
-                        ) : (
-                          <View style={styles.activePrayerBadge}><Text style={styles.activePrayerBadgeText}>🟡 EN ORACIÓN</Text></View>
-                        )}
-                      </View>
-                      
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                        {(currentRole === 'pastor' || isMyPrayer) && !isEditingThis && (
-                          <TouchableOpacity onPress={() => { setEditingPrayerId(p.id); setEditingPrayerText(p.request); }}>
-                            <Text style={{ color: '#00ffcc', fontWeight: 'bold', fontSize: 12 }}>✏️ Editar</Text>
-                          </TouchableOpacity>
-                        )}
-                        {(currentRole === 'pastor' || isMyPrayer) && (
-                          <TouchableOpacity onPress={() => handleDeletePrayer(p.id)}>
-                            <Text style={{ color: '#ff0055', fontWeight: 'bold' }}>✕</Text>
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                    </View>
-
-                    {isEditingThis ? (
-                      <View style={{ marginTop: 8 }}>
-                        <TextInput 
-                          style={[styles.input, { height: 70, marginBottom: 6 }]} 
-                          value={editingPrayerText} 
-                          onChangeText={setEditingPrayerText} 
-                          multiline 
-                        />
-                        <View style={{ flexDirection: 'row', gap: 8 }}>
-                          <TouchableOpacity 
-                            style={[styles.actionBtn, { backgroundColor: '#374151', flex: 1, padding: 8 }]} 
-                            onPress={() => setEditingPrayerId(null)}
-                          >
-                            <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>Cancelar</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity 
-                            style={[styles.actionBtn, { flex: 1, padding: 8 }]} 
-                            onPress={() => handleSaveEditedPrayer(p.id)}
-                          >
-                            <Text style={{ color: '#0b0f19', fontSize: 12, fontWeight: 'bold' }}>Guardar</Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    ) : (
-                      <Text style={styles.cardSub}>{p.request}</Text>
-                    )}
-                    
-                    <View style={styles.prayerActionRow}>
-                      <TouchableOpacity style={styles.supportBtn} onPress={() => handleSupportPrayer(p)}>
-                        <Text style={styles.supportBtnText}>🙏 Me uno en oración ({p.count || 0})</Text>
-                      </TouchableOpacity>
-                      
-                      {currentRole === 'pastor' && (
-                        <TouchableOpacity style={styles.statusToggleBtn} onPress={() => togglePrayerStatus(p)}>
-                          <Text style={styles.statusToggleText}>
-                            {p.status === 'answered' ? '🔄 Marcar en Oración' : '✅ Marcar Respondida'}
-                          </Text>
-                        </TouchableOpacity>
+              {prayers.map(p => (
+                <View key={p.id} style={[styles.card, p.status === 'answered' && styles.answeredCard]}>
+                  <View style={styles.cardHeaderRow}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Text style={styles.cardTitle}>{p.name}</Text>
+                      {p.status === 'answered' ? (
+                        <View style={styles.answeredBadge}><Text style={styles.answeredBadgeText}>✨ RESPONDIDA</Text></View>
+                      ) : (
+                        <View style={styles.activePrayerBadge}><Text style={styles.activePrayerBadgeText}>🟡 EN ORACIÓN</Text></View>
                       )}
                     </View>
+                    {currentRole === 'pastor' && (
+                      <TouchableOpacity onPress={() => handleDeletePrayer(p.id)}>
+                        <Text style={{ color: '#ff0055', fontWeight: 'bold' }}>✕</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
-                );
-              })}
+                  <Text style={styles.cardSub}>{p.request}</Text>
+                  
+                  <View style={styles.prayerActionRow}>
+                    <TouchableOpacity style={styles.supportBtn} onPress={() => handleSupportPrayer(p)}>
+                      <Text style={styles.supportBtnText}>🙏 Me uno en oración ({p.count || 0})</Text>
+                    </TouchableOpacity>
+                    
+                    {currentRole === 'pastor' && (
+                      <TouchableOpacity style={styles.statusToggleBtn} onPress={() => togglePrayerStatus(p)}>
+                        <Text style={styles.statusToggleText}>
+                          {p.status === 'answered' ? '🔄 Marcar en Oración' : '✅ Marcar Respondida'}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              ))}
             </ScrollView>
           )}
 
@@ -838,7 +812,7 @@ export default function App() {
             </ScrollView>
           )}
 
-          {activeTab === 'finance' && currentRole !== 'general' && (
+          {activeTab === 'finance' && currentRole !== 'general' && currentRole !== 'lideres' && (
             <ScrollView style={styles.content}>
               <Text style={styles.centeredSectionTitle}>Diezmos - Ofrendas y Donaciones</Text>
               
@@ -979,8 +953,8 @@ export default function App() {
 
           {activeTab === 'users' && currentRole === 'pastor' && (
             <ScrollView style={styles.content}>
-              <Text style={styles.sectionTitle}>🔐 Gestión de Accesos y Claves</Text>
-              <Text style={styles.cardSub}>Administra los perfiles de acceso. Haz clic en "Modificar" para editar el nombre o la clave de cada uno:</Text>
+              <Text style={styles.sectionTitle}>🔐 Gestión de Accesos y Visibilidad</Text>
+              <Text style={styles.cardSub}>Activa el interruptor para hacer visible un perfil en la pantalla de inicio, o modifícalo según prefieras:</Text>
 
               {adminRoles.map((role) => {
                 const isEditing = editingRoleId === role.id;
@@ -989,58 +963,66 @@ export default function App() {
                   <View key={role.id} style={styles.card}>
                     <View style={styles.cardHeaderRow}>
                       <Text style={styles.cardTitle}>{role.icon} {role.name}</Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                         {!isEditing && (
                           <TouchableOpacity onPress={() => {
                             setEditingRoleId(role.id);
                             setTempRoleName(role.name);
                             setTempRoleKey(role.key);
                           }}>
-                            <Text style={{ color: '#00ffcc', fontWeight: 'bold', fontSize: 13 }}>✏️ Modificar</Text>
+                            <Text style={{ color: '#00ffcc', fontWeight: 'bold', fontSize: 12 }}>✏️ Modificar</Text>
                           </TouchableOpacity>
                         )}
                         {role.id !== 'pastor' && (
                           <TouchableOpacity onPress={() => handleDeleteAdminRole(role.id)}>
-                            <Text style={{ color: '#ff0055', fontWeight: 'bold', fontSize: 13 }}>✕ Eliminar</Text>
+                            <Text style={{ color: '#ff0055', fontWeight: 'bold', fontSize: 12 }}>✕</Text>
                           </TouchableOpacity>
                         )}
                       </View>
                     </View>
 
+                    {/* Interruptor para mostrar u ocultar en el inicio */}
+                    <View style={styles.switchRowInside}>
+                      <Text style={{ color: '#d1d5db', fontSize: 12 }}>Visible en pantalla de inicio:</Text>
+                      <Switch
+                        trackColor={{ false: '#374151', true: '#00ffcc' }}
+                        thumbColor={role.isVisible ? '#0b0f19' : '#9ca3af'}
+                        onValueChange={() => handleToggleRoleVisibility(role.id)}
+                        value={role.isVisible}
+                      />
+                    </View>
+
                     {isEditing ? (
-                      <View style={{ marginTop: 10 }}>
-                        <Text style={{ color: '#9ca3af', fontSize: 11, marginBottom: 2 }}>Nuevo Nombre del Perfil:</Text>
+                      <View style={{ marginTop: 8 }}>
                         <TextInput 
                           style={styles.input} 
                           value={tempRoleName} 
                           onChangeText={setTempRoleName} 
+                          placeholder="Nombre del perfil"
                         />
-
-                        <Text style={{ color: '#9ca3af', fontSize: 11, marginBottom: 2 }}>Nueva Clave de Acceso:</Text>
                         <TextInput 
                           style={styles.input} 
                           value={tempRoleKey} 
                           onChangeText={setTempRoleKey} 
+                          placeholder="Clave de acceso"
                         />
-
-                        <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
                           <TouchableOpacity 
-                            style={[styles.actionBtn, { backgroundColor: '#374151', flex: 1, padding: 10 }]} 
+                            style={[styles.actionBtn, { backgroundColor: '#374151', flex: 1, padding: 8 }]} 
                             onPress={() => setEditingRoleId(null)}
                           >
-                            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 12 }}>Cancelar</Text>
+                            <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>Cancelar</Text>
                           </TouchableOpacity>
-
                           <TouchableOpacity 
-                            style={[styles.actionBtn, { flex: 1, padding: 10 }]} 
+                            style={[styles.actionBtn, { flex: 1, padding: 8 }]} 
                             onPress={() => handleSaveSingleRole(role.id)}
                           >
-                            <Text style={{ color: '#0b0f19', fontWeight: 'bold', fontSize: 12 }}>💾 Guardar</Text>
+                            <Text style={{ color: '#0b0f19', fontSize: 12, fontWeight: 'bold' }}>💾 Guardar</Text>
                           </TouchableOpacity>
                         </View>
                       </View>
                     ) : (
-                      <Text style={[styles.cardSub, { color: '#9ca3af' }]}>Clave actual: ••••</Text>
+                      <Text style={[styles.cardSub, { color: '#9ca3af', fontSize: 12 }]}>Clave: ••••</Text>
                     )}
                   </View>
                 );
@@ -1051,31 +1033,31 @@ export default function App() {
                 onPress={() => setShowCreateNewRoleForm(!showCreateNewRoleForm)}
               >
                 <Text style={styles.addSedeToggleText}>
-                  {showCreateNewRoleForm ? '❌ Cancelar' : '➕ Crear Nuevo Acceso / Perfil'}
+                  {showCreateNewRoleForm ? '❌ Cancelar' : '➕ Crear Nuevo Perfil de Líderes'}
                 </Text>
               </TouchableOpacity>
 
               {showCreateNewRoleForm && (
                 <View style={styles.addSedeCard}>
-                  <Text style={{ color: '#00ffcc', fontWeight: 'bold', marginBottom: 8 }}>Registrar Nuevo Perfil Administrativo</Text>
+                  <Text style={{ color: '#00ffcc', fontWeight: 'bold', marginBottom: 8 }}>Nuevo Perfil (Oculto por defecto)</Text>
                   
                   <TextInput 
                     style={styles.input} 
-                    placeholder="Nombre del cargo (Ej. Diácono o Líder de Jóvenes)" 
+                    placeholder="Nombre (Ej. Líderes de Jóvenes)" 
                     placeholderTextColor="#666" 
                     value={newRoleName} 
                     onChangeText={setNewRoleName} 
                   />
                   <TextInput 
                     style={styles.input} 
-                    placeholder="Clave de acceso numérica" 
+                    placeholder="Clave de acceso" 
                     placeholderTextColor="#666" 
                     value={newRoleKey} 
                     onChangeText={setNewRoleKey} 
                   />
 
                   <TouchableOpacity style={styles.actionBtn} onPress={handleAddNewRole}>
-                    <Text style={styles.actionBtnText}>Guardar Nuevo Acceso</Text>
+                    <Text style={styles.actionBtnText}>Crear Perfil</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -1156,6 +1138,7 @@ const styles = StyleSheet.create({
   offlineBadge: { backgroundColor: '#1f2937', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: '#374151' },
   offlineBadgeText: { color: '#9ca3af', fontSize: 11, fontWeight: 'bold' },
   switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1f2937', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#374151', marginBottom: 12 },
+  switchRowInside: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1f2937', padding: 8, borderRadius: 8, marginVertical: 8 },
   switchLabel: { color: '#ffffff', fontSize: 13, fontWeight: '600' },
   videoContainer: { height: 200, borderRadius: 16, overflow: 'hidden', marginBottom: 12, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: '#1f2937' },
   desktopVideoContainer: { height: 380 },
