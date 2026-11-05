@@ -45,17 +45,15 @@ export default function App() {
 
   const isDesktop = screenData.width >= 768;
 
-  // Definir pestañas permitidas estrictamente por rol
+  // Pestañas estrictamente filtradas por rol
   const getTabsList = () => {
     if (currentRole === 'general') {
       return [
         { key: 'live', label: '📺 Transmisión' },
         { key: 'prayers', label: '🙏 Oración' },
-        { key: 'comites', label: '👥 Comités' },
-        { key: 'services', label: '📋 Cultos' }
+        { key: 'comites', label: '👥 Comités' }
       ];
     }
-    // Pastor, Secretario y Tesorero ven las 5 pestañas, pero con permisos internos filtrados
     return [
       { key: 'live', label: '📺 Transmisión' },
       { key: 'prayers', label: '🙏 Oración' },
@@ -152,7 +150,6 @@ export default function App() {
     fetchData();
   }, []);
 
-  // Lógica de Sedes (Pastor y Secretario tienen control, Tesorero y General solo ven)
   const handleSaveSede = async () => {
     if (currentRole === 'tesorero' || currentRole === 'general') return;
     const finalName = newSedeName.trim() || 'Nueva Sede';
@@ -192,7 +189,6 @@ export default function App() {
     await supabase.from('sedes').delete().eq('id', targetId);
   };
 
-  // Lógica de Oración
   const addPrayer = async () => {
     if (newPrayerRequest.trim() === '') return;
     const newId = String(Date.now());
@@ -233,7 +229,6 @@ export default function App() {
     await supabase.from('prayers').delete().eq('id', String(id));
   };
 
-  // Lógica Comités (Pastor y Secretario controlan, Tesorero y General solo visualizan)
   const handleSaveComite = async () => {
     if (currentRole !== 'pastor' && currentRole !== 'secretario') return;
     const payload = {
@@ -259,7 +254,6 @@ export default function App() {
     await supabase.from('comites').delete().eq('id', String(id));
   };
 
-  // Lógica Tesorería (Tesorero y Pastor controlan, Secretario solo visualiza, General no ve)
   const handleSaveFinance = async () => {
     if (currentRole !== 'pastor' && currentRole !== 'tesorero') return;
     const payload = {
@@ -280,7 +274,6 @@ export default function App() {
     await supabase.from('finance').delete().eq('id', String(id));
   };
 
-  // Lógica Eventos (Pastor y Secretario controlan, Tesorero y General solo visualizan)
   const handleSaveEvent = async () => {
     if (currentRole !== 'pastor' && currentRole !== 'secretario') return;
     if (!newEventTitle.trim()) return;
@@ -357,7 +350,11 @@ export default function App() {
           <TouchableOpacity style={styles.roleItem} onPress={() => { setCurrentRole('tesorero'); setShowRoleSelector(false); setActiveTab('finance'); }}>
             <Text style={styles.roleItemText}>💰 3. Tesorero(a) (Finanzas total + Vistas)</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.roleItem} onPress={() => { setCurrentRole('general'); setShowRoleSelector(false); setActiveTab('live'); }}>
+          <TouchableOpacity style={styles.roleItem} onPress={() => { 
+            setCurrentRole('general'); 
+            setShowRoleSelector(false); 
+            setActiveTab('live'); // Asegurar que salte a transmisión al cambiar a general
+          }}>
             <Text style={styles.roleItemText}>🌐 4. Acceso General (Público / Privacidad)</Text>
           </TouchableOpacity>
         </View>
@@ -484,7 +481,7 @@ export default function App() {
                         <Switch
                           trackColor={{ false: '#374151', true: '#00ffcc' }}
                           thumbColor={newSedeIsLive ? '#0b0f19' : '#9ca3af'}
-                          onValueChange={newSedeIsLive ? () => {} : setNewSedeIsLive} // corregido simple
+                          onValueChange={setNewSedeIsLive}
                           value={newSedeIsLive}
                         />
                       </View>
@@ -618,7 +615,7 @@ export default function App() {
             </ScrollView>
           )}
 
-          {/* MÓDULO DE TESORERÍA */}
+          {/* MÓDULO DE TESORERÍA (Oculto para general) */}
           {activeTab === 'finance' && currentRole !== 'general' && (
             <ScrollView style={styles.content}>
               <Text style={styles.centeredSectionTitle}>Diezmos - Ofrendas y Donaciones</Text>
@@ -664,8 +661,8 @@ export default function App() {
             </ScrollView>
           )}
 
-          {/* MÓDULO DE CULTOS */}
-          {activeTab === 'services' && (
+          {/* MÓDULO DE CULTOS (Oculto para general) */}
+          {activeTab === 'services' && currentRole !== 'general' && (
             <ScrollView style={styles.content}>
               <Text style={styles.sectionTitle}>📅 Calendario de Cultos</Text>
               
