@@ -9,7 +9,8 @@ import {
   TextInput,
   Platform,
   Dimensions,
-  Switch 
+  Switch,
+  Modal
 } from 'react-native';
 import { createClient } from '@supabase/supabase-js';
 
@@ -24,15 +25,22 @@ if (Platform.OS !== 'web') {
 }
 
 export default function App() {
+  const [currentRole, setCurrentRole] = useState(null);
+  
+  // Estado para el Modal de Contraseña Administrativa
+  const [targetRoleToLogin, setTargetRoleToLogin] = useState(null);
+  const [passwordInput, setPasswordInput] = useState('');
+  
+  // Claves de acceso genéricas almacenadas en estado (Gestionables por el Pastor)
+  const [accessKeys, setAccessKeys] = useState({
+    pastor: '1234',
+    secretario: '5678',
+    tesorero: '4321'
+  });
+
   const [activeTab, setActiveTab] = useState('live');
   const [refreshing, setRefreshing] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
-  
-  // Roles: 'pastor', 'secretario', 'tesorero', 'general'
-  const [currentRole, setCurrentRole] = useState('pastor');
-  const [showRoleSelector, setShowRoleSelector] = useState(false);
-
-  // Modo Proyector
   const [isProjectorMode, setIsProjectorMode] = useState(false);
   
   const [screenData, setScreenData] = useState(Dimensions.get('window'));
@@ -45,7 +53,7 @@ export default function App() {
 
   const isDesktop = screenData.width >= 768;
 
-  // Pestañas estrictamente filtradas por rol
+  // Pestañas filtradas estrictamente por rol
   const getTabsList = () => {
     if (currentRole === 'general') {
       return [
@@ -70,12 +78,14 @@ export default function App() {
         { key: 'finance', label: '💰 Tesorería' }
       ];
     }
+    // Pastor incluye pestaña de gestión de usuarios/claves
     return [
       { key: 'live', label: '📺 Transmisión' },
       { key: 'prayers', label: '🙏 Oración' },
       { key: 'comites', label: '👥 Comités' },
       { key: 'finance', label: '💰 Tesorería' },
-      { key: 'services', label: '📋 Cultos' }
+      { key: 'services', label: '📋 Cultos' },
+      { key: 'users', label: '🔐 Accesos' }
     ];
   };
 
@@ -113,7 +123,7 @@ export default function App() {
   const [newFinanceLabel, setNewFinanceLabel] = useState('');
   const [newFinanceAmount, setNewFinanceAmount] = useState('');
 
-  // Calendario (Actualizado con edición de eventos)
+  // Calendario
   const [selectedDay, setSelectedDay] = useState('2026-11-05');
   const [eventsList, setEventsList] = useState([]);
   const [showEventForm, setShowEventForm] = useState(false);
@@ -166,6 +176,18 @@ export default function App() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Manejador de Login con Clave Administrativa
+  const handleAdminLogin = () => {
+    if (passwordInput === accessKeys[targetRoleToLogin]) {
+      setCurrentRole(targetRoleToLogin);
+      setActiveTab(targetRoleToLogin === 'tesorero' ? 'finance' : 'live');
+      setTargetRoleToLogin(null);
+      setPasswordInput('');
+    } else {
+      alert('❌ Clave de acceso incorrecta. Inténtalo de nuevo.');
+    }
+  };
 
   const handleSaveSede = async () => {
     if (currentRole === 'tesorero' || currentRole === 'general') return;
@@ -291,7 +313,6 @@ export default function App() {
     await supabase.from('finance').delete().eq('id', String(id));
   };
 
-  // Lógica de Eventos (Crear y Editar con Supabase)
   const handleSaveEvent = async () => {
     if (currentRole !== 'pastor' && currentRole !== 'secretario') return;
     if (!newEventTitle.trim()) return;
@@ -324,14 +345,109 @@ export default function App() {
   const decDays = Array.from({ length: 31 }, (_, i) => `2026-12-${String(i + 1).padStart(2, '0')}`);
   const activeTabObj = tabsList.find(t => t.key === activeTab);
 
+  // ==========================================
+  // PANTALLA DE BIENVENIDA / SELECCIÓN DE ACCESO
+  // ==========================================
+  if (!currentRole) {
+    return (
+      <SafeAreaView style={styles.welcomeContainer}>
+        <View style={styles.welcomeCard}>
+          <Text style={styles.welcomeEmoji}>⛪</Text>
+          <Text style={styles.welcomeTitle}>Portal Congregacional</Text>
+          <Text style={styles.welcomeSubtitle}>Selecciona tu modo de ingreso para continuar</Text>
+
+          {/* Acceso Público General */}
+          <TouchableOpacity 
+            style={styles.welcomePublicBtn} 
+            onPress={() => { setCurrentRole('general'); setActiveTab('live'); }}
+          >
+            <Text style={styles.welcomePublicBtnText}>🌐 Ingresar a la Congregación</Text>
+            <Text style={styles.welcomePublicBtnSub}>Transmisión, Peticiones y Comités (Sin contraseña)</Text>
+          </TouchableOpacity>
+
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>ACCESOS ADMINISTRATIVOS (REQUIERE CLAVE)</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          {/* Botones de Roles Administrativos que abren modal de clave */}
+          <View style={styles.adminButtonsGrid}>
+            <TouchableOpacity 
+              style={styles.adminRoleBtn} 
+              onPress={() => { setTargetRoleToLogin('pastor'); setPasswordInput(''); }}
+            >
+              <Text style={styles.adminRoleText}>👑 Pastor (Clave)</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.adminRoleBtn} 
+              onPress={() => { setTargetRoleToLogin('secretario'); setPasswordInput(''); }}
+            >
+              <Text style={styles.adminRoleText}>📋 Secretario(a) (Clave)</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.adminRoleBtn} 
+              onPress={() => { setTargetRoleToLogin('tesorero'); setPasswordInput(''); }}
+            >
+              <Text style={styles.adminRoleText}>💰 Tesorero(a) (Clave)</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* MODAL DE INGRESO DE CONTRASEÑA */}
+        <Modal visible={targetRoleToLogin !== null} transparent animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>
+                🔐 Clave de Acceso: {targetRoleToLogin?.toUpperCase()}
+              </Text>
+              <Text style={styles.modalSub}>Introduce la clave asignada por el Pastor:</Text>
+              
+              <TextInput 
+                style={styles.input} 
+                placeholder="Contraseña" 
+                placeholderTextColor="#666" 
+                secureTextEntry 
+                value={passwordInput} 
+                onChangeText={setPasswordInput} 
+                autoFocus
+              />
+
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+                <TouchableOpacity 
+                  style={[styles.actionBtn, { backgroundColor: '#374151', flex: 1 }]} 
+                  onPress={() => setTargetRoleToLogin(null)}
+                >
+                  <Text style={{ color: '#fff', fontWeight: 'bold' }}>Cancelar</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={[styles.actionBtn, { flex: 1 }]} 
+                  onPress={handleAdminLogin}
+                >
+                  <Text style={styles.actionBtnText}>Ingresar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      </SafeAreaView>
+    );
+  }
+
+  // ==========================================
+  // APLICACIÓN PRINCIPAL SEGÚN ROL
+  // ==========================================
   return (
     <SafeAreaView style={styles.container}>
       {!isProjectorMode && (
         <View style={styles.topBarContainer}>
           <View style={styles.roleSelectorWrapper}>
-            <TouchableOpacity style={styles.roleButtonActive} onPress={() => setShowRoleSelector(!showRoleSelector)}>
+            <TouchableOpacity style={styles.roleButtonActive} onPress={() => setCurrentRole(null)}>
               <Text style={styles.roleButtonText}>
-                👤 Perfil: {currentRole === 'pastor' ? 'Pastor (Total)' : currentRole === 'secretario' ? 'Secretario(a)' : currentRole === 'tesorero' ? 'Tesorero(a)' : 'General (Público)'} ▾
+                👤 {currentRole === 'pastor' ? 'Pastor' : currentRole === 'secretario' ? 'Secretario(a)' : currentRole === 'tesorero' ? 'Tesorero(a)' : 'Invitado'} (Cerrar Sesión ⇦)
               </Text>
             </TouchableOpacity>
           </View>
@@ -359,36 +475,6 @@ export default function App() {
 
           <TouchableOpacity style={styles.refreshBtn} onPress={fetchData} disabled={refreshing}>
             <Text style={styles.refreshBtnText}>{refreshing ? '⏳' : '🔄'}</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {showRoleSelector && !isProjectorMode && (
-        <View style={styles.roleDropdownMenu}>
-          <Text style={styles.roleMenuTitle}>Selecciona tu perfil de acceso:</Text>
-          <TouchableOpacity style={styles.roleItem} onPress={() => { setCurrentRole('pastor'); setShowRoleSelector(false); }}>
-            <Text style={styles.roleItemText}>👑 1. Pastor (Acceso y Control Total)</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.roleItem} onPress={() => { 
-            setCurrentRole('secretario'); 
-            setShowRoleSelector(false); 
-            setActiveTab('live'); 
-          }}>
-            <Text style={styles.roleItemText}>📋 2. Secretario(a) (Transmisión, Cultos, Comités)</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.roleItem} onPress={() => { 
-            setCurrentRole('tesorero'); 
-            setShowRoleSelector(false); 
-            setActiveTab('finance'); 
-          }}>
-            <Text style={styles.roleItemText}>💰 3. Tesorero(a) (Finanzas total + Vistas)</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.roleItem} onPress={() => { 
-            setCurrentRole('general'); 
-            setShowRoleSelector(false); 
-            setActiveTab('live'); 
-          }}>
-            <Text style={styles.roleItemText}>🌐 4. Acceso General (Público / Privacidad)</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -694,7 +780,7 @@ export default function App() {
             </ScrollView>
           )}
 
-          {/* MÓDULO DE CULTOS (Con opción de Editar Evento para Pastor y Secretario) */}
+          {/* MÓDULO DE CULTOS */}
           {activeTab === 'services' && currentRole !== 'general' && (
             <ScrollView style={styles.content}>
               <Text style={styles.sectionTitle}>📅 Calendario de Cultos</Text>
@@ -788,6 +874,41 @@ export default function App() {
               )}
             </ScrollView>
           )}
+
+          {/* MÓDULO EXCLUSIVO DEL PASTOR: GESTIÓN DE ACCESOS Y CLAVES */}
+          {activeTab === 'users' && currentRole === 'pastor' && (
+            <ScrollView style={styles.content}>
+              <Text style={styles.sectionTitle}>🔐 Gestión de Accesos y Claves</Text>
+              <Text style={styles.cardSub}>Como Pastor, puedes actualizar las contraseñas de los perfiles administrativos en cualquier momento:</Text>
+
+              <View style={styles.addSedeCard}>
+                <Text style={{ color: '#00ffcc', fontWeight: 'bold', marginBottom: 6 }}>👑 Clave del Pastor</Text>
+                <TextInput 
+                  style={styles.input} 
+                  value={accessKeys.pastor} 
+                  onChangeText={(val) => setAccessKeys({ ...accessKeys, pastor: val })} 
+                />
+
+                <Text style={{ color: '#00ffcc', fontWeight: 'bold', marginBottom: 6, marginTop: 10 }}>📋 Clave del Secretario(a)</Text>
+                <TextInput 
+                  style={styles.input} 
+                  value={accessKeys.secretario} 
+                  onChangeText={(val) => setAccessKeys({ ...accessKeys, secretario: val })} 
+                />
+
+                <Text style={{ color: '#00ffcc', fontWeight: 'bold', marginBottom: 6, marginTop: 10 }}>💰 Clave del Tesorero(a)</Text>
+                <TextInput 
+                  style={styles.input} 
+                  value={accessKeys.tesorero} 
+                  onChangeText={(val) => setAccessKeys({ ...accessKeys, tesorero: val })} 
+                />
+
+                <TouchableOpacity style={[styles.actionBtn, { marginTop: 16 }]} onPress={() => alert('✅ ¡Claves de acceso actualizadas con éxito!')}>
+                  <Text style={styles.actionBtnText}>Guardar Nuevas Claves</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          )}
         </View>
       </View>
     </SafeAreaView>
@@ -796,14 +917,31 @@ export default function App() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0b0f19' },
+  
+  welcomeContainer: { flex: 1, backgroundColor: '#0b0f19', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  welcomeCard: { backgroundColor: '#111827', width: '100%', maxWidth: 440, padding: 28, borderRadius: 20, borderWidth: 2, borderColor: '#00ffcc', alignItems: 'center', shadowColor: '#00ffcc', shadowOpacity: 0.25, shadowRadius: 15 },
+  welcomeEmoji: { fontSize: 44, marginBottom: 10 },
+  welcomeTitle: { fontSize: 24, fontWeight: 'bold', color: '#ffffff', marginBottom: 6, textAlign: 'center' },
+  welcomeSubtitle: { fontSize: 13, color: '#9ca3af', textAlign: 'center', marginBottom: 24 },
+  welcomePublicBtn: { backgroundColor: '#00ffcc', width: '100%', padding: 16, borderRadius: 14, alignItems: 'center', marginBottom: 20 },
+  welcomePublicBtnText: { color: '#0b0f19', fontSize: 15, fontWeight: 'bold' },
+  welcomePublicBtnSub: { color: '#0b0f19', fontSize: 11, fontWeight: '600', opacity: 0.8, marginTop: 2 },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', width: '100%', marginVertical: 16 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: '#374151' },
+  dividerText: { color: '#9ca3af', fontSize: 10, fontWeight: 'bold', marginHorizontal: 10 },
+  adminButtonsGrid: { width: '100%', gap: 10 },
+  adminRoleBtn: { backgroundColor: '#1f2937', padding: 12, borderRadius: 12, alignItems: 'center', borderWidth: 1.5, borderColor: '#374151' },
+  adminRoleText: { color: '#ffffff', fontSize: 13, fontWeight: 'bold' },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalContent: { backgroundColor: '#111827', width: '100%', maxWidth: 360, padding: 22, borderRadius: 16, borderWidth: 2, borderColor: '#00ffcc' },
+  modalTitle: { fontSize: 16, fontWeight: 'bold', color: '#ffffff', marginBottom: 6 },
+  modalSub: { fontSize: 12, color: '#9ca3af', marginBottom: 14 },
+
   topBarContainer: { flexDirection: 'row', backgroundColor: '#111827', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, height: 56, borderBottomWidth: 1, borderColor: '#1f2937', zIndex: 10 },
   roleSelectorWrapper: { marginRight: 10 },
   roleButtonActive: { backgroundColor: '#1f2937', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#00ffcc' },
   roleButtonText: { color: '#00ffcc', fontSize: 12, fontWeight: 'bold' },
-  roleDropdownMenu: { backgroundColor: '#111827', borderWidth: 2, borderColor: '#00ffcc', padding: 8, position: 'absolute', top: 56, left: 10, zIndex: 999, borderRadius: 10, width: 280 },
-  roleMenuTitle: { color: '#9ca3af', fontSize: 11, fontWeight: 'bold', marginBottom: 6, paddingHorizontal: 6 },
-  roleItem: { paddingVertical: 10, paddingHorizontal: 8, borderBottomWidth: 1, borderColor: '#1f2937' },
-  roleItemText: { color: '#ffffff', fontSize: 13, fontWeight: '600' },
   desktopTabRow: { flexDirection: 'row', flex: 1 },
   tabButton: { paddingHorizontal: 16, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
   activeTab: { borderBottomWidth: 3, borderBottomColor: '#00ffcc' },
