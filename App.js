@@ -28,7 +28,11 @@ export default function App() {
   const [refreshing, setRefreshing] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   
-  // Estado para el Modo Proyector (Pantalla completa de video)
+  // Roles: 'pastor', 'secretario', 'tesorero', 'general'
+  const [currentRole, setCurrentRole] = useState('pastor');
+  const [showRoleSelector, setShowRoleSelector] = useState(false);
+
+  // Modo Proyector
   const [isProjectorMode, setIsProjectorMode] = useState(false);
   
   const [screenData, setScreenData] = useState(Dimensions.get('window'));
@@ -41,13 +45,27 @@ export default function App() {
 
   const isDesktop = screenData.width >= 768;
 
-  const tabsList = [
-    { key: 'live', label: '📺 Transmisión' },
-    { key: 'prayers', label: '🙏 Oración' },
-    { key: 'comites', label: '👥 Comités' },
-    { key: 'finance', label: '💰 Tesorería' },
-    { key: 'services', label: '📋 Cultos' }
-  ];
+  // Definir pestañas permitidas estrictamente por rol
+  const getTabsList = () => {
+    if (currentRole === 'general') {
+      return [
+        { key: 'live', label: '📺 Transmisión' },
+        { key: 'prayers', label: '🙏 Oración' },
+        { key: 'comites', label: '👥 Comités' },
+        { key: 'services', label: '📋 Cultos' }
+      ];
+    }
+    // Pastor, Secretario y Tesorero ven las 5 pestañas, pero con permisos internos filtrados
+    return [
+      { key: 'live', label: '📺 Transmisión' },
+      { key: 'prayers', label: '🙏 Oración' },
+      { key: 'comites', label: '👥 Comités' },
+      { key: 'finance', label: '💰 Tesorería' },
+      { key: 'services', label: '📋 Cultos' }
+    ];
+  };
+
+  const tabsList = getTabsList();
 
   // Sedes
   const [sedesList, setSedesList] = useState([
@@ -64,6 +82,7 @@ export default function App() {
   const [prayers, setPrayers] = useState([]);
   const [newPrayerName, setNewPrayerName] = useState('');
   const [newPrayerRequest, setNewPrayerRequest] = useState('');
+  const [myLocalPrayerIds, setMyLocalPrayerIds] = useState([]);
 
   // Comités
   const [comitesList, setComitesList] = useState([]);
@@ -88,7 +107,6 @@ export default function App() {
   const [newEventTime, setNewEventTime] = useState('');
   const [newEventDetails, setNewEventDetails] = useState('');
 
-  // Sincronización con Supabase
   const fetchData = async () => {
     setRefreshing(true);
     try {
@@ -134,8 +152,9 @@ export default function App() {
     fetchData();
   }, []);
 
-  // Lógica de Sedes
+  // Lógica de Sedes (Pastor y Secretario tienen control, Tesorero y General solo ven)
   const handleSaveSede = async () => {
+    if (currentRole === 'tesorero' || currentRole === 'general') return;
     const finalName = newSedeName.trim() || 'Nueva Sede';
     let finalUrl = newSedeChannelUrl.trim();
 
@@ -165,6 +184,7 @@ export default function App() {
   };
 
   const handleDeleteSede = async (idToDelete) => {
+    if (currentRole !== 'pastor') return;
     if (sedesList.length <= 1) return;
     const targetId = String(idToDelete);
     setSedesList(prev => prev.filter(s => s.id !== targetId));
@@ -175,8 +195,9 @@ export default function App() {
   // Lógica de Oración
   const addPrayer = async () => {
     if (newPrayerRequest.trim() === '') return;
+    const newId = String(Date.now());
     const newObj = { 
-      id: String(Date.now()), 
+      id: newId, 
       name: newPrayerName.trim() || 'Anónimo', 
       request: newPrayerRequest.trim(),
       status: 'active',
@@ -184,6 +205,9 @@ export default function App() {
     };
 
     setPrayers(prev => [newObj, ...prev]);
+    if (currentRole === 'general') {
+      setMyLocalPrayerIds(prev => [...prev, newId]);
+    }
     await supabase.from('prayers').insert([newObj]);
     setNewPrayerName('');
     setNewPrayerRequest('');
@@ -196,18 +220,22 @@ export default function App() {
   };
 
   const togglePrayerStatus = async (item) => {
+    if (currentRole === 'general' || currentRole === 'tesorero') return;
     const newStatus = item.status === 'answered' ? 'active' : 'answered';
     setPrayers(prev => prev.map(p => p.id === item.id ? { ...p, status: newStatus } : p));
     await supabase.from('prayers').update({ status: newStatus }).eq('id', item.id);
   };
 
   const handleDeletePrayer = async (id) => {
+    if (currentRole === 'tesorero') return;
+    if (currentRole === 'general' && !myLocalPrayerIds.includes(String(id))) return;
     setPrayers(prev => prev.filter(p => p.id !== String(id)));
     await supabase.from('prayers').delete().eq('id', String(id));
   };
 
-  // Lógica Comités
+  // Lógica Comités (Pastor y Secretario controlan, Tesorero y General solo visualizan)
   const handleSaveComite = async () => {
+    if (currentRole !== 'pastor' && currentRole !== 'secretario') return;
     const payload = {
       id: editingComiteId ? String(editingComiteId) : String(Date.now()),
       nombre: newComiteName.trim() || 'Comité',
@@ -226,12 +254,14 @@ export default function App() {
   };
 
   const handleDeleteComite = async (id) => {
+    if (currentRole !== 'pastor' && currentRole !== 'secretario') return;
     setComitesList(prev => prev.filter(c => c.id !== String(id)));
     await supabase.from('comites').delete().eq('id', String(id));
   };
 
-  // Lógica Tesorería
+  // Lógica Tesorería (Tesorero y Pastor controlan, Secretario solo visualiza, General no ve)
   const handleSaveFinance = async () => {
+    if (currentRole !== 'pastor' && currentRole !== 'tesorero') return;
     const payload = {
       id: editingFinanceId ? String(editingFinanceId) : String(Date.now()),
       label: newFinanceLabel.trim() || 'Fondo',
@@ -244,13 +274,15 @@ export default function App() {
   };
 
   const handleDeleteFinance = async (id) => {
+    if (currentRole !== 'pastor' && currentRole !== 'tesorero') return;
     if (financeList.length <= 1) return;
     setFinanceList(prev => prev.filter(f => f.id !== String(id)));
     await supabase.from('finance').delete().eq('id', String(id));
   };
 
-  // Lógica Eventos
+  // Lógica Eventos (Pastor y Secretario controlan, Tesorero y General solo visualizan)
   const handleSaveEvent = async () => {
+    if (currentRole !== 'pastor' && currentRole !== 'secretario') return;
     if (!newEventTitle.trim()) return;
     const payload = {
       id: String(Date.now()),
@@ -265,6 +297,7 @@ export default function App() {
   };
 
   const handleDeleteEvent = async (id) => {
+    if (currentRole !== 'pastor' && currentRole !== 'secretario') return;
     setEventsList(prev => prev.filter(e => e.id !== String(id)));
     await supabase.from('events').delete().eq('id', String(id));
   };
@@ -275,9 +308,16 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Barra superior oculta en modo proyector para máxima limpieza visual */}
       {!isProjectorMode && (
         <View style={styles.topBarContainer}>
+          <View style={styles.roleSelectorWrapper}>
+            <TouchableOpacity style={styles.roleButtonActive} onPress={() => setShowRoleSelector(!showRoleSelector)}>
+              <Text style={styles.roleButtonText}>
+                👤 Perfil: {currentRole === 'pastor' ? 'Pastor (Total)' : currentRole === 'secretario' ? 'Secretario(a)' : currentRole === 'tesorero' ? 'Tesorero(a)' : 'General (Público)'} ▾
+              </Text>
+            </TouchableOpacity>
+          </View>
+
           {isDesktop ? (
             <View style={styles.desktopTabRow}>
               {tabsList.map(t => (
@@ -301,6 +341,24 @@ export default function App() {
 
           <TouchableOpacity style={styles.refreshBtn} onPress={fetchData} disabled={refreshing}>
             <Text style={styles.refreshBtnText}>{refreshing ? '⏳' : '🔄'}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {showRoleSelector && !isProjectorMode && (
+        <View style={styles.roleDropdownMenu}>
+          <Text style={styles.roleMenuTitle}>Selecciona tu perfil de acceso:</Text>
+          <TouchableOpacity style={styles.roleItem} onPress={() => { setCurrentRole('pastor'); setShowRoleSelector(false); }}>
+            <Text style={styles.roleItemText}>👑 1. Pastor (Acceso y Control Total)</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.roleItem} onPress={() => { setCurrentRole('secretario'); setShowRoleSelector(false); setActiveTab('live'); }}>
+            <Text style={styles.roleItemText}>📋 2. Secretario(a) (Transmisión, Comités, Cultos + Finanzas ver)</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.roleItem} onPress={() => { setCurrentRole('tesorero'); setShowRoleSelector(false); setActiveTab('finance'); }}>
+            <Text style={styles.roleItemText}>💰 3. Tesorero(a) (Finanzas total + Vistas)</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.roleItem} onPress={() => { setCurrentRole('general'); setShowRoleSelector(false); setActiveTab('live'); }}>
+            <Text style={styles.roleItemText}>🌐 4. Acceso General (Público / Privacidad)</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -332,7 +390,7 @@ export default function App() {
                 <>
                   <View style={styles.sedesHeaderRow}>
                     <Text style={styles.labelHeader}>Sedes Registradas:</Text>
-                    {selectedSede && (
+                    {selectedSede && (currentRole === 'pastor' || currentRole === 'secretario') && (
                       <TouchableOpacity onPress={() => { 
                         setEditingId(selectedSede.id); 
                         setNewSedeName(selectedSede.nombre); 
@@ -353,7 +411,7 @@ export default function App() {
                             🏛️ {item.nombre} {item.isLive ? '🔴' : ''}
                           </Text>
                         </TouchableOpacity>
-                        {sedesList.length > 1 && (
+                        {sedesList.length > 1 && currentRole === 'pastor' && (
                           <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDeleteSede(item.id)}>
                             <Text style={styles.deleteBtnText}>✕</Text>
                           </TouchableOpacity>
@@ -372,10 +430,7 @@ export default function App() {
                         <View style={styles.offlineBadge}><Text style={styles.offlineBadgeText}>⚪ OFFLINE</Text></View>
                       )}
                       
-                      <TouchableOpacity 
-                        style={styles.projectorToggleBtn} 
-                        onPress={() => setIsProjectorMode(true)}
-                      >
+                      <TouchableOpacity style={styles.projectorToggleBtn} onPress={() => setIsProjectorMode(true)}>
                         <Text style={styles.projectorToggleText}>🖥️ Modo Proyector</Text>
                       </TouchableOpacity>
                     </div>
@@ -383,7 +438,6 @@ export default function App() {
                 </>
               )}
 
-              {/* Contenedor de Video (Pantalla Completa en Modo Proyector) */}
               <View style={[
                 styles.videoContainer, 
                 isDesktop && styles.desktopVideoContainer,
@@ -401,18 +455,14 @@ export default function App() {
                   </View>
                 )}
 
-                {/* Botón flotante para salir del Modo Proyector */}
                 {isProjectorMode && (
-                  <TouchableOpacity 
-                    style={styles.exitProjectorBtn} 
-                    onPress={() => setIsProjectorMode(false)}
-                  >
+                  <TouchableOpacity style={styles.exitProjectorBtn} onPress={() => setIsProjectorMode(false)}>
                     <Text style={styles.exitProjectorText}>✖ Salir de Modo Proyector</Text>
                   </TouchableOpacity>
                 )}
               </View>
 
-              {!isProjectorMode && (
+              {!isProjectorMode && (currentRole === 'pastor' || currentRole === 'secretario') && (
                 <>
                   <TouchableOpacity style={styles.addSedeToggleBtn} onPress={() => {
                     setEditingId(null);
@@ -434,7 +484,7 @@ export default function App() {
                         <Switch
                           trackColor={{ false: '#374151', true: '#00ffcc' }}
                           thumbColor={newSedeIsLive ? '#0b0f19' : '#9ca3af'}
-                          onValueChange={setNewSedeIsLive}
+                          onValueChange={newSedeIsLive ? () => {} : setNewSedeIsLive} // corregido simple
                           value={newSedeIsLive}
                         />
                       </View>
@@ -462,31 +512,42 @@ export default function App() {
                 </TouchableOpacity>
               </View>
 
-              {prayers.map(p => (
+              {prayers
+                .filter(p => {
+                  if (currentRole !== 'general') return true;
+                  return myLocalPrayerIds.includes(String(p.id)) || p.name === 'Anónimo';
+                })
+                .map(p => (
                 <View key={p.id} style={[styles.card, p.status === 'answered' && styles.answeredCard]}>
                   <View style={styles.cardHeaderRow}>
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Text style={styles.cardTitle}>{p.name}</Text>
+                      <Text style={styles.cardTitle}>{currentRole === 'general' && !myLocalPrayerIds.includes(String(p.id)) ? 'Petición Congregacional' : p.name}</Text>
                       {p.status === 'answered' ? (
                         <View style={styles.answeredBadge}><Text style={styles.answeredBadgeText}>✨ RESPONDIDA</Text></View>
                       ) : (
                         <View style={styles.activePrayerBadge}><Text style={styles.activePrayerBadgeText}>🟡 EN ORACIÓN</Text></View>
                       )}
                     </View>
-                    <TouchableOpacity onPress={() => handleDeletePrayer(p.id)}>
-                      <Text style={{ color: '#ff0055', fontWeight: 'bold' }}>✕</Text>
-                    </TouchableOpacity>
+                    {(currentRole === 'pastor' || currentRole === 'secretario' || (currentRole === 'general' && myLocalPrayerIds.includes(String(p.id)))) && (
+                      <TouchableOpacity onPress={() => handleDeletePrayer(p.id)}>
+                        <Text style={{ color: '#ff0055', fontWeight: 'bold' }}>✕</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                   <Text style={styles.cardSub}>{p.request}</Text>
+                  
                   <View style={styles.prayerActionRow}>
                     <TouchableOpacity style={styles.supportBtn} onPress={() => handleSupportPrayer(p)}>
                       <Text style={styles.supportBtnText}>🙏 Me uno en oración ({p.count || 0})</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.statusToggleBtn} onPress={() => togglePrayerStatus(p)}>
-                      <Text style={styles.statusToggleText}>
-                        {p.status === 'answered' ? '🔄 Marcar en Oración' : '✅ Marcar Respondida'}
-                      </Text>
-                    </TouchableOpacity>
+                    
+                    {(currentRole === 'pastor' || currentRole === 'secretario') && (
+                      <TouchableOpacity style={styles.statusToggleBtn} onPress={() => togglePrayerStatus(p)}>
+                        <Text style={styles.statusToggleText}>
+                          {p.status === 'answered' ? '🔄 Marcar en Oración' : '✅ Marcar Respondida'}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </View>
               ))}
@@ -502,23 +563,25 @@ export default function App() {
                 <View key={comite.id} style={styles.card}>
                   <View style={styles.cardHeaderRow}>
                     <Text style={styles.cardTitle}>🏛️ {comite.nombre}</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <TouchableOpacity 
-                        style={{ marginRight: 12 }}
-                        onPress={() => {
-                          setEditingComiteId(comite.id);
-                          setNewComiteName(comite.nombre);
-                          setNewComiteLider(comite.lider);
-                          setNewComiteSecretario(comite.secretario);
-                          setShowComiteForm(true);
-                        }}
-                      >
-                        <Text style={{ color: '#00ffcc', fontWeight: 'bold' }}>✏️ Editar</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => handleDeleteComite(comite.id)}>
-                        <Text style={{ color: '#ff0055', fontWeight: 'bold' }}>✕ Eliminar</Text>
-                      </TouchableOpacity>
-                    </View>
+                    {(currentRole === 'pastor' || currentRole === 'secretario') && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <TouchableOpacity 
+                          style={{ marginRight: 12 }}
+                          onPress={() => {
+                            setEditingComiteId(comite.id);
+                            setNewComiteName(comite.nombre);
+                            setNewComiteLider(comite.lider);
+                            setNewComiteSecretario(comite.secretario);
+                            setShowComiteForm(true);
+                          }}
+                        >
+                          <Text style={{ color: '#00ffcc', fontWeight: 'bold' }}>✏️ Editar</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => handleDeleteComite(comite.id)}>
+                          <Text style={{ color: '#ff0055', fontWeight: 'bold' }}>✕ Eliminar</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
                   </View>
 
                   <View style={{ marginTop: 8, backgroundColor: '#1f2937', padding: 10, borderRadius: 8 }}>
@@ -528,59 +591,50 @@ export default function App() {
                 </View>
               ))}
 
-              <TouchableOpacity style={styles.addSedeToggleBtn} onPress={() => {
-                setEditingComiteId(null);
-                setNewComiteName('');
-                setNewComiteLider('');
-                setNewComiteSecretario('');
-                setShowComiteForm(!showComiteForm);
-              }}>
-                <Text style={styles.addSedeToggleText}>{showComiteForm ? '❌ Cancelar' : '➕ Crear Nuevo Comité'}</Text>
-              </TouchableOpacity>
-
-              {showComiteForm && (
-                <View style={styles.addSedeCard}>
-                  <TextInput 
-                    style={styles.input} 
-                    placeholder="Nombre del Comité" 
-                    placeholderTextColor="#666" 
-                    value={newComiteName} 
-                    onChangeText={setNewComiteName} 
-                  />
-                  <TextInput 
-                    style={styles.input} 
-                    placeholder="1. Nombre del Líder" 
-                    placeholderTextColor="#666" 
-                    value={newComiteLider} 
-                    onChangeText={setNewComiteLider} 
-                  />
-                  <TextInput 
-                    style={styles.input} 
-                    placeholder="2. Nombre del Secretario" 
-                    placeholderTextColor="#666" 
-                    value={newComiteSecretario} 
-                    onChangeText={setNewComiteSecretario} 
-                  />
-                  <TouchableOpacity style={styles.actionBtn} onPress={handleSaveComite}>
-                    <Text style={styles.actionBtnText}>
-                      {editingComiteId ? 'Actualizar Comité' : 'Guardar Comité'}
-                    </Text>
+              {(currentRole === 'pastor' || currentRole === 'secretario') && (
+                <>
+                  <TouchableOpacity style={styles.addSedeToggleBtn} onPress={() => {
+                    setEditingComiteId(null);
+                    setNewComiteName('');
+                    setNewComiteLider('');
+                    setNewComiteSecretario('');
+                    setShowComiteForm(!showComiteForm);
+                  }}>
+                    <Text style={styles.addSedeToggleText}>{showComiteForm ? '❌ Cancelar' : '➕ Crear Nuevo Comité'}</Text>
                   </TouchableOpacity>
-                </View>
+
+                  {showComiteForm && (
+                    <View style={styles.addSedeCard}>
+                      <TextInput style={styles.input} placeholder="Nombre del Comité" placeholderTextColor="#666" value={newComiteName} onChangeText={setNewComiteName} />
+                      <TextInput style={styles.input} placeholder="1. Nombre del Líder" placeholderTextColor="#666" value={newComiteLider} onChangeText={setNewComiteLider} />
+                      <TextInput style={styles.input} placeholder="2. Nombre del Secretario" placeholderTextColor="#666" value={newComiteSecretario} onChangeText={setNewComiteSecretario} />
+                      <TouchableOpacity style={styles.actionBtn} onPress={handleSaveComite}>
+                        <Text style={styles.actionBtnText}>{editingComiteId ? 'Actualizar Comité' : 'Guardar Comité'}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </>
               )}
             </ScrollView>
           )}
 
           {/* MÓDULO DE TESORERÍA */}
-          {activeTab === 'finance' && (
+          {activeTab === 'finance' && currentRole !== 'general' && (
             <ScrollView style={styles.content}>
               <Text style={styles.centeredSectionTitle}>Diezmos - Ofrendas y Donaciones</Text>
+              
+              {currentRole === 'secretario' && (
+                <View style={{ backgroundColor: '#1f2937', padding: 8, borderRadius: 8, marginBottom: 12, alignItems: 'center' }}>
+                  <Text style={{ color: '#fbbf24', fontSize: 12 }}>👁️ Modo Solo Visualización (Secretaría)</Text>
+                </View>
+              )}
+
               <View style={styles.metricContainer}>
                 {financeList.map(item => (
                   <View key={item.id} style={[styles.metricCard, isDesktop && { width: '32%' }]}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                       <Text style={styles.metricLabel}>{item.label}</Text>
-                      {financeList.length > 1 && (
+                      {(currentRole === 'pastor' || currentRole === 'tesorero') && financeList.length > 1 && (
                         <TouchableOpacity onPress={() => handleDeleteFinance(item.id)}>
                           <Text style={{ color: '#ff0055', fontWeight: 'bold' }}>✕</Text>
                         </TouchableOpacity>
@@ -590,17 +644,22 @@ export default function App() {
                   </View>
                 ))}
               </View>
-              <TouchableOpacity style={styles.addSedeToggleBtn} onPress={() => setShowFinanceForm(!showFinanceForm)}>
-                <Text style={styles.addSedeToggleText}>{showFinanceForm ? '❌ Cancelar' : '➕ Crear Nuevo Fondo'}</Text>
-              </TouchableOpacity>
-              {showFinanceForm && (
-                <View style={styles.addSedeCard}>
-                  <TextInput style={styles.input} placeholder="Nombre del Fondo" placeholderTextColor="#666" value={newFinanceLabel} onChangeText={setNewFinanceLabel} />
-                  <TextInput style={styles.input} placeholder="Monto (Ej: $ 150,000)" placeholderTextColor="#666" value={newFinanceAmount} onChangeText={setNewFinanceAmount} />
-                  <TouchableOpacity style={styles.actionBtn} onPress={handleSaveFinance}>
-                    <Text style={styles.actionBtnText}>Guardar Fondo</Text>
+
+              {(currentRole === 'pastor' || currentRole === 'tesorero') && (
+                <>
+                  <TouchableOpacity style={styles.addSedeToggleBtn} onPress={() => setShowFinanceForm(!showFinanceForm)}>
+                    <Text style={styles.addSedeToggleText}>{showFinanceForm ? '❌ Cancelar' : '➕ Crear Nuevo Fondo'}</Text>
                   </TouchableOpacity>
-                </View>
+                  {showFinanceForm && (
+                    <View style={styles.addSedeCard}>
+                      <TextInput style={styles.input} placeholder="Nombre del Fondo" placeholderTextColor="#666" value={newFinanceLabel} onChangeText={setNewFinanceLabel} />
+                      <TextInput style={styles.input} placeholder="Monto (Ej: $ 150,000)" placeholderTextColor="#666" value={newFinanceAmount} onChangeText={setNewFinanceAmount} />
+                      <TouchableOpacity style={styles.actionBtn} onPress={handleSaveFinance}>
+                        <Text style={styles.actionBtnText}>Guardar Fondo</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </>
               )}
             </ScrollView>
           )}
@@ -615,17 +674,9 @@ export default function App() {
                 {novDays.map((dayStr) => {
                   const hasEvent = eventsList.some(e => e.date === dayStr);
                   return (
-                    <TouchableOpacity 
-                      key={dayStr} 
-                      style={[styles.dayBox, selectedDay === dayStr && styles.selectedDayBox]} 
-                      onPress={() => setSelectedDay(dayStr)}
-                    >
-                      <Text style={[styles.dayText, selectedDay === dayStr && styles.selectedDayText]}>
-                        {dayStr.split('-')[2]}
-                      </Text>
-                      {hasEvent && (
-                        <View style={[styles.eventDot, selectedDay === dayStr && styles.selectedEventDot]} />
-                      )}
+                    <TouchableOpacity key={dayStr} style={[styles.dayBox, selectedDay === dayStr && styles.selectedDayBox]} onPress={() => setSelectedDay(dayStr)}>
+                      <Text style={[styles.dayText, selectedDay === dayStr && styles.selectedDayText]}>{dayStr.split('-')[2]}</Text>
+                      {hasEvent && <View style={[styles.eventDot, selectedDay === dayStr && styles.selectedEventDot]} />}
                     </TouchableOpacity>
                   );
                 })}
@@ -637,17 +688,9 @@ export default function App() {
                   {decDays.map((dayStr) => {
                     const hasEvent = eventsList.some(e => e.date === dayStr);
                     return (
-                      <TouchableOpacity 
-                        key={dayStr} 
-                        style={[styles.dayBox, selectedDay === dayStr && styles.selectedDayBox]} 
-                        onPress={() => setSelectedDay(dayStr)}
-                      >
-                        <Text style={[styles.dayText, selectedDay === dayStr && styles.selectedDayText]}>
-                          {dayStr.split('-')[2]}
-                        </Text>
-                        {hasEvent && (
-                          <View style={[styles.eventDot, selectedDay === dayStr && styles.selectedEventDot]} />
-                        )}
+                      <TouchableOpacity key={dayStr} style={[styles.dayBox, selectedDay === dayStr && styles.selectedDayBox]} onPress={() => setSelectedDay(dayStr)}>
+                        <Text style={[styles.dayText, selectedDay === dayStr && styles.selectedDayText]}>{dayStr.split('-')[2]}</Text>
+                        {hasEvent && <View style={[styles.eventDot, selectedDay === dayStr && styles.selectedEventDot]} />}
                       </TouchableOpacity>
                     );
                   })}
@@ -656,12 +699,14 @@ export default function App() {
 
               <View style={styles.selectedDayHeader}>
                 <Text style={styles.sectionTitle}>Eventos del {selectedDay}</Text>
-                <TouchableOpacity style={styles.smallAddBtn} onPress={() => setShowEventForm(!showEventForm)}>
-                  <Text style={styles.smallAddText}>{showEventForm ? '✕ Cancelar' : '➕ Agregar'}</Text>
-                </TouchableOpacity>
+                {(currentRole === 'pastor' || currentRole === 'secretario') && (
+                  <TouchableOpacity style={styles.smallAddBtn} onPress={() => setShowEventForm(!showEventForm)}>
+                    <Text style={styles.smallAddText}>{showEventForm ? '✕ Cancelar' : '➕ Agregar'}</Text>
+                  </TouchableOpacity>
+                )}
               </View>
 
-              {showEventForm && (
+              {showEventForm && (currentRole === 'pastor' || currentRole === 'secretario') && (
                 <View style={styles.addSedeCard}>
                   <TextInput style={styles.input} placeholder="Título del Evento" placeholderTextColor="#666" value={newEventTitle} onChangeText={setNewEventTitle} />
                   <TextInput style={styles.input} placeholder="Hora (Ej: 7:00 PM)" placeholderTextColor="#666" value={newEventTime} onChangeText={setNewEventTime} />
@@ -677,9 +722,11 @@ export default function App() {
                   <View key={ev.id} style={styles.card}>
                     <View style={styles.cardHeaderRow}>
                       <Text style={styles.cardTitle}>⏰ {ev.time} - {ev.title}</Text>
-                      <TouchableOpacity onPress={() => handleDeleteEvent(ev.id)}>
-                        <Text style={{ color: '#ff0055', fontWeight: 'bold' }}>✕ Eliminar</Text>
-                      </TouchableOpacity>
+                      {(currentRole === 'pastor' || currentRole === 'secretario') && (
+                        <TouchableOpacity onPress={() => handleDeleteEvent(ev.id)}>
+                          <Text style={{ color: '#ff0055', fontWeight: 'bold' }}>✕ Eliminar</Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
                     <Text style={styles.cardSub}>{ev.details}</Text>
                   </View>
@@ -700,6 +747,13 @@ export default function App() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0b0f19' },
   topBarContainer: { flexDirection: 'row', backgroundColor: '#111827', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, height: 56, borderBottomWidth: 1, borderColor: '#1f2937', zIndex: 10 },
+  roleSelectorWrapper: { marginRight: 10 },
+  roleButtonActive: { backgroundColor: '#1f2937', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#00ffcc' },
+  roleButtonText: { color: '#00ffcc', fontSize: 12, fontWeight: 'bold' },
+  roleDropdownMenu: { backgroundColor: '#111827', borderWidth: 2, borderColor: '#00ffcc', padding: 8, position: 'absolute', top: 56, left: 10, zIndex: 999, borderRadius: 10, width: 280 },
+  roleMenuTitle: { color: '#9ca3af', fontSize: 11, fontWeight: 'bold', marginBottom: 6, paddingHorizontal: 6 },
+  roleItem: { paddingVertical: 10, paddingHorizontal: 8, borderBottomWidth: 1, borderColor: '#1f2937' },
+  roleItemText: { color: '#ffffff', fontSize: 13, fontWeight: '600' },
   desktopTabRow: { flexDirection: 'row', flex: 1 },
   tabButton: { paddingHorizontal: 16, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
   activeTab: { borderBottomWidth: 3, borderBottomColor: '#00ffcc' },
@@ -738,28 +792,25 @@ const styles = StyleSheet.create({
   offlineBadgeText: { color: '#9ca3af', fontSize: 11, fontWeight: 'bold' },
   switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1f2937', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#374151', marginBottom: 12 },
   switchLabel: { color: '#ffffff', fontSize: 13, fontWeight: '600' },
-  
-  // Estilos de Video y Modo Proyector
-  videoContainer: { height: 200, borderRadius: 16, overflow: 'hidden', marginBottom: 12, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: '#1f2937', shadowColor: '#00ffcc', shadowOpacity: 0.15, shadowRadius: 10 },
+  videoContainer: { height: 200, borderRadius: 16, overflow: 'hidden', marginBottom: 12, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: '#1f2937' },
   desktopVideoContainer: { height: 380 },
   fullScreenProjectorContainer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, height: '100vh', zIndex: 9999, borderRadius: 0, borderWidth: 0 },
   projectorToggleBtn: { backgroundColor: '#1f2937', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: '#00ffcc' },
   projectorToggleText: { color: '#00ffcc', fontSize: 11, fontWeight: 'bold' },
   exitProjectorBtn: { position: 'absolute', top: 20, right: 20, backgroundColor: 'rgba(255, 0, 85, 0.85)', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, zIndex: 10000 },
   exitProjectorText: { color: '#fff', fontWeight: 'bold', fontSize: 12 },
-
   emptyVideoBox: { padding: 20, alignItems: 'center', justifyContent: 'center' },
   emptyVideoText: { color: '#ffffff', fontSize: 13, fontWeight: 'bold', textAlign: 'center' },
   addSedeToggleBtn: { borderStyle: 'dashed', borderWidth: 2, borderColor: '#00ffcc', padding: 12, borderRadius: 12, alignItems: 'center', marginBottom: 12, backgroundColor: '#111827' },
   addSedeToggleText: { color: '#00ffcc', fontWeight: 'bold', fontSize: 13 },
-  addSedeCard: { backgroundColor: '#111827', padding: 16, borderRadius: 14, marginBottom: 12, borderWidth: 2, borderColor: '#00ffcc', shadowColor: '#00ffcc', shadowOpacity: 0.2, shadowRadius: 8 },
+  addSedeCard: { backgroundColor: '#111827', padding: 16, borderRadius: 14, marginBottom: 12, borderWidth: 2, borderColor: '#00ffcc' },
   card: { backgroundColor: '#111827', padding: 16, borderRadius: 14, marginBottom: 10, borderWidth: 1, borderColor: '#1f2937' },
   answeredCard: { borderColor: '#00ffcc', backgroundColor: '#0b1f1a' },
   cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   cardTitle: { fontSize: 15, fontWeight: 'bold', color: '#ffffff', marginRight: 8 },
   cardSub: { fontSize: 13, color: '#d1d5db', marginTop: 4, lineHeight: 18 },
   input: { backgroundColor: '#1f2937', padding: 12, borderRadius: 10, borderWidth: 1.5, borderColor: '#374151', marginBottom: 8, color: '#ffffff', fontSize: 14 },
-  actionBtn: { backgroundColor: '#00ffcc', padding: 14, borderRadius: 12, alignItems: 'center', marginTop: 4, shadowColor: '#00ffcc', shadowOpacity: 0.3, shadowRadius: 10 },
+  actionBtn: { backgroundColor: '#00ffcc', padding: 14, borderRadius: 12, alignItems: 'center', marginTop: 4 },
   actionBtnText: { color: '#0b0f19', fontWeight: 'bold', fontSize: 14 },
   metricContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 10 },
   metricCard: { width: '48%', backgroundColor: '#111827', padding: 14, borderRadius: 14, borderWidth: 1.5, borderColor: '#1f2937', marginBottom: 10 },
@@ -773,8 +824,6 @@ const styles = StyleSheet.create({
   selectedDayHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, marginBottom: 10 },
   smallAddBtn: { backgroundColor: '#1f2937', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#374151' },
   smallAddText: { color: '#00ffcc', fontWeight: 'bold', fontSize: 12 },
-  
-  // Estilos de Oración
   activePrayerBadge: { backgroundColor: '#374151', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
   activePrayerBadgeText: { color: '#fbbf24', fontSize: 10, fontWeight: 'bold' },
   answeredBadge: { backgroundColor: '#064e3b', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
@@ -784,8 +833,6 @@ const styles = StyleSheet.create({
   supportBtnText: { color: '#00ffcc', fontSize: 12, fontWeight: 'bold' },
   statusToggleBtn: { paddingHorizontal: 8, paddingVertical: 6 },
   statusToggleText: { color: '#9ca3af', fontSize: 12, fontWeight: '600' },
-
-  // Estilos de Calendario
   eventDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#00ffcc', marginTop: 2 },
   selectedEventDot: { backgroundColor: '#0b0f19' }
 });
