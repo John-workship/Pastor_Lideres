@@ -28,6 +28,9 @@ export default function App() {
   const [refreshing, setRefreshing] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   
+  // Estado para el Modo Proyector (Pantalla completa de video)
+  const [isProjectorMode, setIsProjectorMode] = useState(false);
+  
   const [screenData, setScreenData] = useState(Dimensions.get('window'));
 
   useEffect(() => {
@@ -62,7 +65,7 @@ export default function App() {
   const [newPrayerName, setNewPrayerName] = useState('');
   const [newPrayerRequest, setNewPrayerRequest] = useState('');
 
-  // Comités (Actualizado con Líder y Secretario)
+  // Comités
   const [comitesList, setComitesList] = useState([]);
   const [showComiteForm, setShowComiteForm] = useState(false);
   const [editingComiteId, setEditingComiteId] = useState(null);
@@ -203,7 +206,7 @@ export default function App() {
     await supabase.from('prayers').delete().eq('id', String(id));
   };
 
-  // Lógica Comités (Con Edición, Líder y Secretario)
+  // Lógica Comités
   const handleSaveComite = async () => {
     const payload = {
       id: editingComiteId ? String(editingComiteId) : String(Date.now()),
@@ -272,34 +275,37 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.topBarContainer}>
-        {isDesktop ? (
-          <View style={styles.desktopTabRow}>
-            {tabsList.map(t => (
-              <TouchableOpacity key={t.key} style={[styles.tabButton, activeTab === t.key && styles.activeTab]} onPress={() => setActiveTab(t.key)}>
-                <Text style={[styles.tabText, activeTab === t.key && styles.activeTabText]}>
-                  {t.key === 'live' && selectedSede?.isLive ? '📺 Transmisión 🔴' : t.label}
+      {/* Barra superior oculta en modo proyector para máxima limpieza visual */}
+      {!isProjectorMode && (
+        <View style={styles.topBarContainer}>
+          {isDesktop ? (
+            <View style={styles.desktopTabRow}>
+              {tabsList.map(t => (
+                <TouchableOpacity key={t.key} style={[styles.tabButton, activeTab === t.key && styles.activeTab]} onPress={() => setActiveTab(t.key)}>
+                  <Text style={[styles.tabText, activeTab === t.key && styles.activeTabText]}>
+                    {t.key === 'live' && selectedSede?.isLive ? '📺 Transmisión 🔴' : t.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : (
+            <View style={styles.mobileDropdownWrapper}>
+              <TouchableOpacity style={styles.dropdownSelector} onPress={() => setShowDropdown(!showDropdown)}>
+                <Text style={styles.dropdownSelectorText}>
+                  {activeTab === 'live' && selectedSede?.isLive ? '📺 Transmisión 🔴' : (activeTabObj?.label || 'Seleccionar Módulo')}
                 </Text>
+                <Text style={styles.dropdownArrow}>{showDropdown ? '▲' : '▼'}</Text>
               </TouchableOpacity>
-            ))}
-          </View>
-        ) : (
-          <View style={styles.mobileDropdownWrapper}>
-            <TouchableOpacity style={styles.dropdownSelector} onPress={() => setShowDropdown(!showDropdown)}>
-              <Text style={styles.dropdownSelectorText}>
-                {activeTab === 'live' && selectedSede?.isLive ? '📺 Transmisión 🔴' : (activeTabObj?.label || 'Seleccionar Módulo')}
-              </Text>
-              <Text style={styles.dropdownArrow}>{showDropdown ? '▲' : '▼'}</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+            </View>
+          )}
 
-        <TouchableOpacity style={styles.refreshBtn} onPress={fetchData} disabled={refreshing}>
-          <Text style={styles.refreshBtnText}>{refreshing ? '⏳' : '🔄'}</Text>
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity style={styles.refreshBtn} onPress={fetchData} disabled={refreshing}>
+            <Text style={styles.refreshBtnText}>{refreshing ? '⏳' : '🔄'}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
-      {!isDesktop && showDropdown && (
+      {!isDesktop && showDropdown && !isProjectorMode && (
         <View style={styles.dropdownMenu}>
           {tabsList.map(t => (
             <TouchableOpacity 
@@ -320,49 +326,69 @@ export default function App() {
           
           {/* MÓDULO DE TRANSMISIÓN */}
           {activeTab === 'live' && (
-            <ScrollView style={styles.content}>
-              <View style={styles.sedesHeaderRow}>
-                <Text style={styles.labelHeader}>Sedes Registradas:</Text>
-                {selectedSede && (
-                  <TouchableOpacity onPress={() => { 
-                    setEditingId(selectedSede.id); 
-                    setNewSedeName(selectedSede.nombre); 
-                    setNewSedeChannelUrl(selectedSede.url); 
-                    setNewSedeIsLive(selectedSede.isLive || false);
-                    setShowAddForm(true); 
-                  }}>
-                    <Text style={styles.editSedeText}>✏️ Modificar Sede Actual</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
-                {sedesList.map((item) => (
-                  <View key={item.id} style={styles.sedeChipWrapper}>
-                    <TouchableOpacity style={[styles.sedeChip, String(selectedSede?.id) === String(item.id) && styles.activeSedeChip]} onPress={() => setSelectedSede(item)}>
-                      <Text style={[styles.sedeChipText, String(selectedSede?.id) === String(item.id) && styles.activeSedeChipText]}>
-                        🏛️ {item.nombre} {item.isLive ? '🔴' : ''}
-                      </Text>
-                    </TouchableOpacity>
-                    {sedesList.length > 1 && (
-                      <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDeleteSede(item.id)}>
-                        <Text style={styles.deleteBtnText}>✕</Text>
+            <ScrollView style={[styles.content, isProjectorMode && { padding: 0, backgroundColor: '#000' }]}>
+              
+              {!isProjectorMode && (
+                <>
+                  <View style={styles.sedesHeaderRow}>
+                    <Text style={styles.labelHeader}>Sedes Registradas:</Text>
+                    {selectedSede && (
+                      <TouchableOpacity onPress={() => { 
+                        setEditingId(selectedSede.id); 
+                        setNewSedeName(selectedSede.nombre); 
+                        setNewSedeChannelUrl(selectedSede.url); 
+                        setNewSedeIsLive(selectedSede.isLive || false);
+                        setShowAddForm(true); 
+                      }}>
+                        <Text style={styles.editSedeText}>✏️ Modificar Sede Actual</Text>
                       </TouchableOpacity>
                     )}
                   </View>
-                ))}
-              </ScrollView>
 
-              <View style={styles.headerRow}>
-                <Text style={styles.sectionTitle}>{selectedSede?.nombre || 'Sede'}</Text>
-                {selectedSede?.isLive ? (
-                  <View style={styles.liveBadge}><Text style={styles.liveBadgeText}>🔴 EN DIRECTO</Text></View>
-                ) : (
-                  <View style={styles.offlineBadge}><Text style={styles.offlineBadgeText}>⚪ OFFLINE</Text></View>
-                )}
-              </View>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+                    {sedesList.map((item) => (
+                      <View key={item.id} style={styles.sedeChipWrapper}>
+                        <TouchableOpacity style={[styles.sedeChip, String(selectedSede?.id) === String(item.id) && styles.activeSedeChip]} onPress={() => setSelectedSede(item)}>
+                          <Text style={[styles.sedeChipText, String(selectedSede?.id) === String(item.id) && styles.activeSedeChipText]}>
+                            🏛️ {item.nombre} {item.isLive ? '🔴' : ''}
+                          </Text>
+                        </TouchableOpacity>
+                        {sedesList.length > 1 && (
+                          <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDeleteSede(item.id)}>
+                            <Text style={styles.deleteBtnText}>✕</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    ))}
+                  </ScrollView>
 
-              <View style={[styles.videoContainer, isDesktop && styles.desktopVideoContainer]}>
+                  <View style={styles.headerRow}>
+                    <Text style={styles.sectionTitle}>{selectedSede?.nombre || 'Sede'}</Text>
+                    
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      {selectedSede?.isLive ? (
+                        <View style={styles.liveBadge}><Text style={styles.liveBadgeText}>🔴 EN DIRECTO</Text></View>
+                      ) : (
+                        <View style={styles.offlineBadge}><Text style={styles.offlineBadgeText}>⚪ OFFLINE</Text></View>
+                      )}
+                      
+                      <TouchableOpacity 
+                        style={styles.projectorToggleBtn} 
+                        onPress={() => setIsProjectorMode(true)}
+                      >
+                        <Text style={styles.projectorToggleText}>🖥️ Modo Proyector</Text>
+                      </TouchableOpacity>
+                    </div>
+                  </View>
+                </>
+              )}
+
+              {/* Contenedor de Video (Pantalla Completa en Modo Proyector) */}
+              <View style={[
+                styles.videoContainer, 
+                isDesktop && styles.desktopVideoContainer,
+                isProjectorMode && styles.fullScreenProjectorContainer
+              ]}>
                 {selectedSede?.url ? (
                   Platform.OS === 'web' ? (
                     <iframe width="100%" height="100%" src={selectedSede.url} frameBorder="0" allowFullScreen />
@@ -374,37 +400,51 @@ export default function App() {
                     <Text style={styles.emptyVideoText}>⚠️ No hay URL de transmisión configurada.</Text>
                   </View>
                 )}
+
+                {/* Botón flotante para salir del Modo Proyector */}
+                {isProjectorMode && (
+                  <TouchableOpacity 
+                    style={styles.exitProjectorBtn} 
+                    onPress={() => setIsProjectorMode(false)}
+                  >
+                    <Text style={styles.exitProjectorText}>✖ Salir de Modo Proyector</Text>
+                  </TouchableOpacity>
+                )}
               </View>
 
-              <TouchableOpacity style={styles.addSedeToggleBtn} onPress={() => {
-                setEditingId(null);
-                setNewSedeName('');
-                setNewSedeChannelUrl('');
-                setNewSedeIsLive(false);
-                setShowAddForm(!showAddForm);
-              }}>
-                <Text style={styles.addSedeToggleText}>{showAddForm ? '❌ Cancelar' : '➕ Registrar Nueva Sede'}</Text>
-              </TouchableOpacity>
-
-              {showAddForm && (
-                <View style={styles.addSedeCard}>
-                  <TextInput style={styles.input} placeholder="Nombre de la Sede" placeholderTextColor="#666" value={newSedeName} onChangeText={setNewSedeName} />
-                  <TextInput style={styles.input} placeholder="URL de YouTube" placeholderTextColor="#666" value={newSedeChannelUrl} onChangeText={setNewSedeChannelUrl} />
-                  
-                  <View style={styles.switchRow}>
-                    <Text style={styles.switchLabel}>¿Está en Transmisión En Vivo?</Text>
-                    <Switch
-                      trackColor={{ false: '#374151', true: '#00ffcc' }}
-                      thumbColor={newSedeIsLive ? '#0b0f19' : '#9ca3af'}
-                      onValueChange={setNewSedeIsLive}
-                      value={newSedeIsLive}
-                    />
-                  </View>
-
-                  <TouchableOpacity style={styles.actionBtn} onPress={handleSaveSede}>
-                    <Text style={styles.actionBtnText}>Guardar en Base de Datos</Text>
+              {!isProjectorMode && (
+                <>
+                  <TouchableOpacity style={styles.addSedeToggleBtn} onPress={() => {
+                    setEditingId(null);
+                    setNewSedeName('');
+                    setNewSedeChannelUrl('');
+                    setNewSedeIsLive(false);
+                    setShowAddForm(!showAddForm);
+                  }}>
+                    <Text style={styles.addSedeToggleText}>{showAddForm ? '❌ Cancelar' : '➕ Registrar Nueva Sede'}</Text>
                   </TouchableOpacity>
-                </View>
+
+                  {showAddForm && (
+                    <View style={styles.addSedeCard}>
+                      <TextInput style={styles.input} placeholder="Nombre de la Sede" placeholderTextColor="#666" value={newSedeName} onChangeText={setNewSedeName} />
+                      <TextInput style={styles.input} placeholder="URL de YouTube" placeholderTextColor="#666" value={newSedeChannelUrl} onChangeText={setNewSedeChannelUrl} />
+                      
+                      <View style={styles.switchRow}>
+                        <Text style={styles.switchLabel}>¿Está en Transmisión En Vivo?</Text>
+                        <Switch
+                          trackColor={{ false: '#374151', true: '#00ffcc' }}
+                          thumbColor={newSedeIsLive ? '#0b0f19' : '#9ca3af'}
+                          onValueChange={setNewSedeIsLive}
+                          value={newSedeIsLive}
+                        />
+                      </View>
+
+                      <TouchableOpacity style={styles.actionBtn} onPress={handleSaveSede}>
+                        <Text style={styles.actionBtnText}>Guardar en Base de Datos</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </>
               )}
             </ScrollView>
           )}
@@ -453,7 +493,7 @@ export default function App() {
             </ScrollView>
           )}
 
-          {/* MÓDULO DE COMITÉS ACTUALIZADO */}
+          {/* MÓDULO DE COMITÉS */}
           {activeTab === 'comites' && (
             <ScrollView style={styles.content}>
               <Text style={styles.sectionTitle}>👥 Comités de Trabajo</Text>
@@ -502,7 +542,7 @@ export default function App() {
                 <View style={styles.addSedeCard}>
                   <TextInput 
                     style={styles.input} 
-                    placeholder="Nombre del Comité (Ej: Comité de Jóvenes)" 
+                    placeholder="Nombre del Comité" 
                     placeholderTextColor="#666" 
                     value={newComiteName} 
                     onChangeText={setNewComiteName} 
@@ -698,20 +738,28 @@ const styles = StyleSheet.create({
   offlineBadgeText: { color: '#9ca3af', fontSize: 11, fontWeight: 'bold' },
   switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1f2937', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#374151', marginBottom: 12 },
   switchLabel: { color: '#ffffff', fontSize: 13, fontWeight: '600' },
-  videoContainer: { height: 200, borderRadius: 16, overflow: 'hidden', marginBottom: 12, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#1f2937' },
+  
+  // Estilos de Video y Modo Proyector
+  videoContainer: { height: 200, borderRadius: 16, overflow: 'hidden', marginBottom: 12, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: '#1f2937', shadowColor: '#00ffcc', shadowOpacity: 0.15, shadowRadius: 10 },
   desktopVideoContainer: { height: 380 },
+  fullScreenProjectorContainer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, height: '100vh', zIndex: 9999, borderRadius: 0, borderWidth: 0 },
+  projectorToggleBtn: { backgroundColor: '#1f2937', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: '#00ffcc' },
+  projectorToggleText: { color: '#00ffcc', fontSize: 11, fontWeight: 'bold' },
+  exitProjectorBtn: { position: 'absolute', top: 20, right: 20, backgroundColor: 'rgba(255, 0, 85, 0.85)', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, zIndex: 10000 },
+  exitProjectorText: { color: '#fff', fontWeight: 'bold', fontSize: 12 },
+
   emptyVideoBox: { padding: 20, alignItems: 'center', justifyContent: 'center' },
   emptyVideoText: { color: '#ffffff', fontSize: 13, fontWeight: 'bold', textAlign: 'center' },
   addSedeToggleBtn: { borderStyle: 'dashed', borderWidth: 2, borderColor: '#00ffcc', padding: 12, borderRadius: 12, alignItems: 'center', marginBottom: 12, backgroundColor: '#111827' },
   addSedeToggleText: { color: '#00ffcc', fontWeight: 'bold', fontSize: 13 },
-  addSedeCard: { backgroundColor: '#111827', padding: 16, borderRadius: 14, marginBottom: 12, borderWidth: 2, borderColor: '#00ffcc' },
+  addSedeCard: { backgroundColor: '#111827', padding: 16, borderRadius: 14, marginBottom: 12, borderWidth: 2, borderColor: '#00ffcc', shadowColor: '#00ffcc', shadowOpacity: 0.2, shadowRadius: 8 },
   card: { backgroundColor: '#111827', padding: 16, borderRadius: 14, marginBottom: 10, borderWidth: 1, borderColor: '#1f2937' },
   answeredCard: { borderColor: '#00ffcc', backgroundColor: '#0b1f1a' },
   cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   cardTitle: { fontSize: 15, fontWeight: 'bold', color: '#ffffff', marginRight: 8 },
   cardSub: { fontSize: 13, color: '#d1d5db', marginTop: 4, lineHeight: 18 },
   input: { backgroundColor: '#1f2937', padding: 12, borderRadius: 10, borderWidth: 1.5, borderColor: '#374151', marginBottom: 8, color: '#ffffff', fontSize: 14 },
-  actionBtn: { backgroundColor: '#00ffcc', padding: 14, borderRadius: 12, alignItems: 'center', marginTop: 4 },
+  actionBtn: { backgroundColor: '#00ffcc', padding: 14, borderRadius: 12, alignItems: 'center', marginTop: 4, shadowColor: '#00ffcc', shadowOpacity: 0.3, shadowRadius: 10 },
   actionBtnText: { color: '#0b0f19', fontWeight: 'bold', fontSize: 14 },
   metricContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 10 },
   metricCard: { width: '48%', backgroundColor: '#111827', padding: 14, borderRadius: 14, borderWidth: 1.5, borderColor: '#1f2937', marginBottom: 10 },
