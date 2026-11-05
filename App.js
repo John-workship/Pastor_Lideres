@@ -40,7 +40,7 @@ export default function App() {
     tesorero: '3333'
   });
 
-  const [activeTab, setActiveTab] = useState('home'); // 'home' es la nueva pantalla de inicio por rol
+  const [activeTab, setActiveTab] = useState('home');
   const [refreshing, setRefreshing] = useState(false);
   const [isProjectorMode, setIsProjectorMode] = useState(false);
   
@@ -54,7 +54,6 @@ export default function App() {
 
   const isDesktop = screenData.width >= 768;
 
-  // Definición de los accesos permitidos y sus tarjetas para el Dashboard de inicio
   const getRoleDashboardItems = () => {
     if (currentRole === 'general') {
       return [
@@ -79,7 +78,6 @@ export default function App() {
         { key: 'finance', title: 'Tesorería (Visualización)', subtitle: 'Consulta los fondos y reportes financieros', icon: '💰', color: '#a78bfa' }
       ];
     }
-    // Pastor (Acceso total)
     return [
       { key: 'live', title: 'Transmisión en Vivo', subtitle: 'Administra sedes y el reproductor en directo', icon: '📺', color: '#00ffcc' },
       { key: 'prayers', title: 'Red de Oración', subtitle: 'Gestiona peticiones y marca respondidas', icon: '🙏', color: '#34d399' },
@@ -176,7 +174,7 @@ export default function App() {
   const handleAdminLogin = () => {
     if (passwordInput === accessKeys[targetRoleToLogin]) {
       setCurrentRole(targetRoleToLogin);
-      setActiveTab('home'); // Ir directo al inicio de su rol
+      setActiveTab('home');
       setTargetRoleToLogin(null);
       setPasswordInput('');
     } else {
@@ -352,7 +350,7 @@ export default function App() {
     return (
       <SafeAreaView style={styles.welcomeContainer}>
         <View style={styles.welcomeCard}>
-          <Text style={styles.welcomeEmoji}>⛪</Text>
+          <Text style={styles.welcomeEmoji}>🏛️</Text>
           <Text style={styles.welcomeTitle}>Portal Congregacional</Text>
           <Text style={styles.welcomeSubtitle}>Selecciona tu modo de ingreso para continuar</Text>
 
@@ -375,7 +373,7 @@ export default function App() {
               style={styles.adminRoleBtn} 
               onPress={() => { setTargetRoleToLogin('pastor'); setPasswordInput(''); }}
             >
-              <Text style={styles.adminRoleText}>👑 Pastor (Clave)</Text>
+              <Text style={styles.adminRoleText}>📖 Pastor (Clave)</Text>
             </TouchableOpacity>
 
             <TouchableOpacity 
@@ -480,7 +478,6 @@ export default function App() {
             </TouchableOpacity>
           </View>
 
-          {/* Botón para regresar al Inicio / Dashboard principal */}
           {activeTab !== 'home' && (
             <TouchableOpacity style={styles.homeNavBtn} onPress={() => setActiveTab('home')}>
               <Text style={styles.homeNavBtnText}>🏠 Inicio</Text>
@@ -496,9 +493,6 @@ export default function App() {
       <View style={[styles.mainWrapper, isDesktop && styles.desktopWrapper]}>
         <View style={{ flex: 1, width: '100%' }}>
 
-          {/* ========================================================= */}
-          {/* PANTALLA DE INICIO / DASHBOARD PRINCIPAL POR ROL          */}
-          {/* ========================================================= */}
           {activeTab === 'home' && (
             <ScrollView style={styles.content}>
               <View style={styles.dashboardWelcomeCard}>
@@ -526,9 +520,6 @@ export default function App() {
             </ScrollView>
           )}
           
-          {/* ========================================================= */}
-          {/* MÓDULO: TRANSMISIÓN EN VIVO                               */}
-          {/* ========================================================= */}
           {activeTab === 'live' && (
             <ScrollView style={[styles.content, isProjectorMode && { padding: 0, backgroundColor: '#000' }]}>
               
@@ -645,9 +636,6 @@ export default function App() {
             </ScrollView>
           )}
 
-          {/* ========================================================= */}
-          {/* MÓDULO: RED DE ORACIÓN                                    */}
-          {/* ========================================================= */}
           {activeTab === 'prayers' && currentRole !== 'tesorero' && currentRole !== 'secretario' && (
             <ScrollView style={styles.content}>
               <Text style={styles.sectionTitle}>🙏 Red de Oración Congregacional</Text>
@@ -704,9 +692,6 @@ export default function App() {
             </ScrollView>
           )}
 
-          {/* ========================================================= */}
-          {/* MÓDULO: COMITÉS DE TRABAJO                                */}
-          {/* ========================================================= */}
           {activeTab === 'comites' && (
             <ScrollView style={styles.content}>
               <Text style={styles.sectionTitle}>👥 Comités de Trabajo</Text>
@@ -770,9 +755,6 @@ export default function App() {
             </ScrollView>
           )}
 
-          {/* ========================================================= */}
-          {/* MÓDULO: TESORERÍA                                         */}
-          {/* ========================================================= */}
           {activeTab === 'finance' && currentRole !== 'general' && (
             <ScrollView style={styles.content}>
               <Text style={styles.centeredSectionTitle}>Diezmos - Ofrendas y Donaciones</Text>
@@ -818,9 +800,6 @@ export default function App() {
             </ScrollView>
           )}
 
-          {/* ========================================================= */}
-          {/* MÓDULO: CALENDARIO DE CULTOS                              */}
-          {/* ========================================================= */}
           {activeTab === 'services' && currentRole !== 'general' && (
             <ScrollView style={styles.content}>
               <Text style={styles.sectionTitle}>📅 Calendario de Cultos</Text>
@@ -915,16 +894,13 @@ export default function App() {
             </ScrollView>
           )}
 
-          {/* ========================================================= */}
-          {/* MÓDULO: GESTIÓN DE ACCESOS (SOLO PASTOR)                  */}
-          {/* ========================================================= */}
           {activeTab === 'users' && currentRole === 'pastor' && (
             <ScrollView style={styles.content}>
               <Text style={styles.sectionTitle}>🔐 Gestión de Accesos y Claves</Text>
               <Text style={styles.cardSub}>Como Pastor, puedes actualizar las contraseñas de los perfiles administrativos en cualquier momento:</Text>
 
               <View style={styles.addSedeCard}>
-                <Text style={{ color: '#00ffcc', fontWeight: 'bold', marginBottom: 6 }}>👑 Clave del Pastor</Text>
+                <Text style={{ color: '#00ffcc', fontWeight: 'bold', marginBottom: 6 }}>📖 Clave del Pastor</Text>
                 <TextInput 
                   style={styles.input} 
                   value={accessKeys.pastor} 
@@ -996,7 +972,6 @@ const styles = StyleSheet.create({
   desktopWrapper: { maxWidth: 1024, alignSelf: 'center', width: '100%' },
   content: { flex: 1, padding: 16 },
 
-  // Estilos del Dashboard de Inicio
   dashboardWelcomeCard: { backgroundColor: '#111827', padding: 20, borderRadius: 16, marginBottom: 16, borderWidth: 1.5, borderColor: '#1f2937', alignItems: 'center' },
   dashboardWelcomeEmoji: { fontSize: 32, marginBottom: 6 },
   dashboardWelcomeTitle: { fontSize: 18, fontWeight: 'bold', color: '#ffffff', textAlign: 'center', marginBottom: 4 },
