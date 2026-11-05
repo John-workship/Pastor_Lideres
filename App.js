@@ -141,8 +141,8 @@ export default function App() {
       if (prayersData && prayersData.length > 0) {
         setPrayers(prayersData.map(p => ({
           ...p,
-          status: p.status || 'active', // Por defecto inicia activa (En oración)
-          count: p.count || 0
+          status: p.status || 'active',
+          count: p.count !== undefined ? p.count : 0
         })));
       }
 
@@ -238,8 +238,8 @@ export default function App() {
       id: newId, 
       name: authorName, 
       request: newPrayerRequest.trim(),
-      status: 'active', // Garantiza que nazca en estado "En oración"
-      count: 1
+      status: 'active',
+      count: 0 // Comienza en 0 para que no aparezca con reacciones automáticas
     };
 
     setPrayers(prev => [newObj, ...prev]);
@@ -259,7 +259,6 @@ export default function App() {
 
   const togglePrayerStatus = async (item) => {
     if (currentRole === 'general' || currentRole === 'tesorero' || currentRole === 'secretario') return;
-    // Si está activa pasa a 'answered', si ya estaba respondida regresa a 'active'
     const newStatus = item.status === 'answered' ? 'active' : 'answered';
     setPrayers(prev => prev.map(p => p.id === item.id ? { ...p, status: newStatus } : p));
     await supabase.from('prayers').update({ status: newStatus }).eq('id', item.id);
