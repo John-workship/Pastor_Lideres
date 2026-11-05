@@ -33,12 +33,16 @@ export default function App() {
   const [targetRoleToLogin, setTargetRoleToLogin] = useState(null);
   const [passwordInput, setPasswordInput] = useState('');
   
-  // Claves configuradas (Pastor: 6789)
-  const [accessKeys, setAccessKeys] = useState({
-    pastor: '6789',
-    secretario: '5555',
-    tesorero: '3333'
-  });
+  // Lista dinámica de perfiles administrativos configurables por el Pastor
+  const [adminRoles, setAdminRoles] = useState([
+    { id: 'pastor', name: 'Pastor', key: '6789', icon: '📖' },
+    { id: 'secretario', name: 'Secretario(a)', key: '5555', icon: '📋' },
+    { id: 'tesorero', name: 'Tesorero(a)', key: '3333', icon: '💰' }
+  ]);
+
+  // Estados temporales para crear un nuevo acceso
+  const [newRoleName, setNewRoleName] = useState('');
+  const [newRoleKey, setNewRoleKey] = useState('');
 
   const [activeTab, setActiveTab] = useState('home');
   const [refreshing, setRefreshing] = useState(false);
@@ -78,13 +82,14 @@ export default function App() {
         { key: 'finance', title: 'Tesorería (Visualización)', subtitle: 'Consulta los fondos y reportes financieros', icon: '💰', color: '#a78bfa' }
       ];
     }
+    // Si es pastor o un rol personalizado creado por él, tiene acceso total o adaptado
     return [
       { key: 'live', title: 'Transmisión en Vivo', subtitle: 'Administra sedes y el reproductor en directo', icon: '📺', color: '#00ffcc' },
       { key: 'prayers', title: 'Red de Oración', subtitle: 'Gestiona peticiones y marca respondidas', icon: '🙏', color: '#34d399' },
       { key: 'comites', title: 'Comités de Trabajo', subtitle: 'Organiza líderes, comités y secretarios', icon: '👥', color: '#fbbf24' },
       { key: 'finance', title: 'Tesorería y Fondos', subtitle: 'Administra fondos, ofrendas y cuentas', icon: '💰', color: '#a78bfa' },
       { key: 'services', title: 'Calendario de Cultos', subtitle: 'Planifica la agenda de servicios y eventos', icon: '📋', color: '#f472b6' },
-      { key: 'users', title: 'Gestión de Accesos', subtitle: 'Modifica las contraseñas administrativas', icon: '🔐', color: '#60a5fa' }
+      { key: 'users', title: 'Gestión de Accesos', subtitle: 'Modifica perfiles, nombres y claves', icon: '🔐', color: '#60a5fa' }
     ];
   };
 
@@ -105,7 +110,6 @@ export default function App() {
   const [newPrayerRequest, setNewPrayerRequest] = useState('');
   const [myLocalPrayerIds, setMyLocalPrayerIds] = useState([]);
   
-  // Estados para controlar la edición de una petición existente
   const [editingPrayerId, setEditingPrayerId] = useState(null);
   const [editingPrayerText, setEditingPrayerText] = useState('');
 
@@ -176,8 +180,9 @@ export default function App() {
   }, []);
 
   const handleAdminLogin = () => {
-    if (passwordInput === accessKeys[targetRoleToLogin]) {
-      setCurrentRole(targetRoleToLogin);
+    const foundRole = adminRoles.find(r => r.id === targetRoleToLogin);
+    if (foundRole && passwordInput === foundRole.key) {
+      setCurrentRole(foundRole.id);
       setActiveTab('home');
       setTargetRoleToLogin(null);
       setPasswordInput('');
@@ -190,6 +195,31 @@ export default function App() {
     setCurrentRole('general');
     setActiveTab('home');
     setShowGeneralModal(false);
+  };
+
+  const handleAddNewRole = () => {
+    if (!newRoleName.trim() || !newRoleKey.trim()) {
+      alert('⚠️ Por favor ingresa el nombre del cargo y su respectiva clave.');
+      return;
+    }
+    const newId = newRoleName.trim().toLowerCase().replace(/\s+/g, '_');
+    if (adminRoles.some(r => r.id === newId)) {
+      alert('⚠️ Ya existe un perfil con un nombre similar.');
+      return;
+    }
+
+    setAdminRoles(prev => [...prev, { id: newId, name: newRoleName.trim(), key: newRoleKey.trim(), icon: '👤' }]);
+    setNewRoleName('');
+    setNewRoleKey('');
+    alert('✅ ¡Nuevo acceso creado con éxito!');
+  };
+
+  const handleDeleteAdminRole = (roleId) => {
+    if (roleId === 'pastor') {
+      alert('⚠️ No se puede eliminar el perfil principal del Pastor.');
+      return;
+    }
+    setAdminRoles(prev => prev.filter(r => r.id !== roleId));
   };
 
   const handleSaveSede = async () => {
@@ -254,7 +284,6 @@ export default function App() {
     setNewPrayerRequest('');
   };
 
-  // Función para guardar los cambios de una petición editada
   const handleSaveEditedPrayer = async (id) => {
     if (!editingPrayerText.trim()) return;
     setPrayers(prev => prev.map(p => p.id === id ? { ...p, request: editingPrayerText.trim() } : p));
@@ -382,26 +411,15 @@ export default function App() {
           </View>
 
           <View style={styles.adminButtonsGrid}>
-            <TouchableOpacity 
-              style={styles.adminRoleBtn} 
-              onPress={() => { setTargetRoleToLogin('pastor'); setPasswordInput(''); }}
-            >
-              <Text style={styles.adminRoleText}>📖 Pastor (Clave)</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={styles.adminRoleBtn} 
-              onPress={() => { setTargetRoleToLogin('secretario'); setPasswordInput(''); }}
-            >
-              <Text style={styles.adminRoleText}>📋 Secretario(a) (Clave)</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={styles.adminRoleBtn} 
-              onPress={() => { setTargetRoleToLogin('tesorero'); setPasswordInput(''); }}
-            >
-              <Text style={styles.adminRoleText}>💰 Tesorero(a) (Clave)</Text>
-            </TouchableOpacity>
+            {adminRoles.map(role => (
+              <TouchableOpacity 
+                key={role.id}
+                style={styles.adminRoleBtn} 
+                onPress={() => { setTargetRoleToLogin(role.id); setPasswordInput(''); }}
+              >
+                <Text style={styles.adminRoleText}>{role.icon} {role.name} (Clave)</Text>
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
 
@@ -443,7 +461,7 @@ export default function App() {
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>
-                🔐 Clave de Acceso: {targetRoleToLogin?.toUpperCase()}
+                🔐 Clave de Acceso: {adminRoles.find(r => r.id === targetRoleToLogin)?.name?.toUpperCase()}
               </Text>
               <Text style={styles.modalSub}>Introduce la clave asignada por el Pastor:</Text>
               
@@ -479,6 +497,8 @@ export default function App() {
     );
   }
 
+  const currentRoleObj = adminRoles.find(r => r.id === currentRole);
+
   return (
     <SafeAreaView style={styles.container}>
       {!isProjectorMode && (
@@ -486,7 +506,7 @@ export default function App() {
           <View style={styles.roleSelectorWrapper}>
             <TouchableOpacity style={styles.roleButtonActive} onPress={() => setCurrentRole(null)}>
               <Text style={styles.roleButtonText}>
-                👤 {currentRole === 'pastor' ? 'Pastor' : currentRole === 'secretario' ? 'Secretario(a)' : currentRole === 'tesorero' ? 'Tesorero(a)' : (generalUserName ? generalUserName : 'Invitado')} (Salir ⇦)
+                👤 {currentRoleObj ? currentRoleObj.name : (generalUserName ? generalUserName : 'Invitado')} (Salir ⇦)
               </Text>
             </TouchableOpacity>
           </View>
@@ -511,7 +531,7 @@ export default function App() {
               <View style={styles.dashboardWelcomeCard}>
                 <Text style={styles.dashboardWelcomeEmoji}>✨</Text>
                 <Text style={styles.dashboardWelcomeTitle}>
-                  Bienvenido, {currentRole === 'pastor' ? 'Pastor' : currentRole === 'secretario' ? 'Secretario(a)' : currentRole === 'tesorero' ? 'Tesorero(a)' : (generalUserName || 'Hermanos')}
+                  Bienvenido, {currentRoleObj ? currentRoleObj.name : (generalUserName || 'Hermanos')}
                 </Text>
                 <Text style={styles.dashboardWelcomeSub}>Selecciona una opción para acceder a sus funciones:</Text>
               </View>
@@ -649,7 +669,7 @@ export default function App() {
             </ScrollView>
           )}
 
-          {activeTab === 'prayers' && currentRole !== 'tesorero' && currentRole !== 'secretario' && (
+          {activeTab === 'prayers' && currentRole !== 'general' && (
             <ScrollView style={styles.content}>
               <Text style={styles.sectionTitle}>🙏 Red de Oración Congregacional</Text>
               
@@ -680,7 +700,6 @@ export default function App() {
                       </View>
                       
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                        {/* Botón de editar visible solo para el autor de la petición o el pastor */}
                         {(currentRole === 'pastor' || isMyPrayer) && !isEditingThis && (
                           <TouchableOpacity onPress={() => { setEditingPrayerId(p.id); setEditingPrayerText(p.request); }}>
                             <Text style={{ color: '#00ffcc', fontWeight: 'bold', fontSize: 12 }}>✏️ Editar</Text>
@@ -694,7 +713,6 @@ export default function App() {
                       </View>
                     </View>
 
-                    {/* Si está en modo edición, muestra un input para corregir */}
                     {isEditingThis ? (
                       <View style={{ marginTop: 8 }}>
                         <TextInput 
@@ -946,32 +964,69 @@ export default function App() {
           {activeTab === 'users' && currentRole === 'pastor' && (
             <ScrollView style={styles.content}>
               <Text style={styles.sectionTitle}>🔐 Gestión de Accesos y Claves</Text>
-              <Text style={styles.cardSub}>Como Pastor, puedes actualizar las contraseñas de los perfiles administrativos en cualquier momento:</Text>
+              <Text style={styles.cardSub}>Modifica los nombres, claves de los perfiles existentes o crea nuevos accesos administrativos:</Text>
 
               <View style={styles.addSedeCard}>
-                <Text style={{ color: '#00ffcc', fontWeight: 'bold', marginBottom: 6 }}>📖 Clave del Pastor</Text>
-                <TextInput 
-                  style={styles.input} 
-                  value={accessKeys.pastor} 
-                  onChangeText={(val) => setAccessKeys({ ...accessKeys, pastor: val })} 
-                />
+                {adminRoles.map((role, index) => (
+                  <View key={role.id} style={{ marginBottom: 14 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <Text style={{ color: '#00ffcc', fontWeight: 'bold' }}>Perfil {index + 1}:</Text>
+                      {role.id !== 'pastor' && (
+                        <TouchableOpacity onPress={() => handleDeleteAdminRole(role.id)}>
+                          <Text style={{ color: '#ff0055', fontSize: 12, fontWeight: 'bold' }}>✕ Eliminar Perfil</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
 
-                <Text style={{ color: '#00ffcc', fontWeight: 'bold', marginBottom: 6, marginTop: 10 }}>📋 Clave del Secretario(a)</Text>
-                <TextInput 
-                  style={styles.input} 
-                  value={accessKeys.secretario} 
-                  onChangeText={(val) => setAccessKeys({ ...accessKeys, secretario: val })} 
-                />
+                    <Text style={{ color: '#9ca3af', fontSize: 11, marginBottom: 2 }}>Nombre del Cargo / Perfil:</Text>
+                    <TextInput 
+                      style={styles.input} 
+                      value={role.name} 
+                      onChangeText={(val) => {
+                        const updated = [...adminRoles];
+                        updated[index].name = val;
+                        setAdminRoles(updated);
+                      }} 
+                    />
 
-                <Text style={{ color: '#00ffcc', fontWeight: 'bold', marginBottom: 6, marginTop: 10 }}>💰 Clave del Tesorero(a)</Text>
-                <TextInput 
-                  style={styles.input} 
-                  value={accessKeys.tesorero} 
-                  onChangeText={(val) => setAccessKeys({ ...accessKeys, tesorero: val })} 
-                />
+                    <Text style={{ color: '#9ca3af', fontSize: 11, marginBottom: 2 }}>Clave de Acceso:</Text>
+                    <TextInput 
+                      style={styles.input} 
+                      value={role.key} 
+                      onChangeText={(val) => {
+                        const updated = [...adminRoles];
+                        updated[index].key = val;
+                        setAdminRoles(updated);
+                      }} 
+                    />
+                  </View>
+                ))}
 
-                <TouchableOpacity style={[styles.actionBtn, { marginTop: 16 }]} onPress={() => alert('✅ ¡Claves de acceso actualizadas con éxito!')}>
-                  <Text style={styles.actionBtnText}>Guardar Nuevas Claves</Text>
+                <View style={{ borderTopWidth: 1, borderColor: '#374151', marginVertical: 12, paddingTop: 12 }}>
+                  <Text style={{ color: '#fbbf24', fontWeight: 'bold', marginBottom: 6 }}>➕ Crear Nuevo Acceso / Perfil</Text>
+                  
+                  <TextInput 
+                    style={styles.input} 
+                    placeholder="Nombre del nuevo perfil (Ej. Diácono)" 
+                    placeholderTextColor="#666" 
+                    value={newRoleName} 
+                    onChangeText={setNewRoleName} 
+                  />
+                  <TextInput 
+                    style={styles.input} 
+                    placeholder="Clave de acceso numérica o texto" 
+                    placeholderTextColor="#666" 
+                    value={newRoleKey} 
+                    onChangeText={setNewRoleKey} 
+                  />
+
+                  <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#374151', marginTop: 4 }]} onPress={handleAddNewRole}>
+                    <Text style={{ color: '#00ffcc', fontWeight: 'bold' }}>Añadir Nuevo Perfil</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity style={[styles.actionBtn, { marginTop: 16 }]} onPress={() => alert('✅ ¡Perfiles y claves actualizados con éxito!')}>
+                  <Text style={styles.actionBtnText}>Guardar Cambios</Text>
                 </TouchableOpacity>
               </View>
             </ScrollView>
@@ -1077,7 +1132,7 @@ const styles = StyleSheet.create({
   metricLabel: { fontSize: 12, color: '#9ca3af', fontWeight: '600' },
   metricValue: { fontSize: 18, fontWeight: 'bold', marginTop: 4 },
   daysScroll: { flexDirection: 'row', marginVertical: 8 },
-  dayBox: { width: 44, height: 48, backgroundColor: '#111827', justifyContent: 'center', alignItems: 'center', borderRadius: 10, borderWidth: 1.5, borderColor: '#374151', marginRight: 6 },
+  dayBox: { width: 44, height: 48, backgroundColor: '#111827', justifyContent: 'center', alignItems: 'center', borderRadius: 10, borderWidth: 1.5, borderColor: '#1f2937', marginRight: 6 },
   selectedDayBox: { backgroundColor: '#00ffcc', borderColor: '#00ffcc' },
   dayText: { fontSize: 14, fontWeight: 'bold', color: '#d1d5db' },
   selectedDayText: { color: '#0b0f19' },
