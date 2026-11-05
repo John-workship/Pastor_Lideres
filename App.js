@@ -62,6 +62,14 @@ export default function App() {
         { key: 'services', label: '📋 Cultos' }
       ];
     }
+    if (currentRole === 'secretario') {
+      return [
+        { key: 'live', label: '📺 Transmisión' },
+        { key: 'comites', label: '👥 Comités' },
+        { key: 'services', label: '📋 Cultos' },
+        { key: 'finance', label: '💰 Tesorería' }
+      ];
+    }
     return [
       { key: 'live', label: '📺 Transmisión' },
       { key: 'prayers', label: '🙏 Oración' },
@@ -224,14 +232,14 @@ export default function App() {
   };
 
   const togglePrayerStatus = async (item) => {
-    if (currentRole === 'general' || currentRole === 'tesorero') return;
+    if (currentRole === 'general' || currentRole === 'tesorero' || currentRole === 'secretario') return;
     const newStatus = item.status === 'answered' ? 'active' : 'answered';
     setPrayers(prev => prev.map(p => p.id === item.id ? { ...p, status: newStatus } : p));
     await supabase.from('prayers').update({ status: newStatus }).eq('id', item.id);
   };
 
   const handleDeletePrayer = async (id) => {
-    if (currentRole === 'tesorero') return;
+    if (currentRole === 'tesorero' || currentRole === 'secretario') return;
     if (currentRole === 'general' && !myLocalPrayerIds.includes(String(id))) return;
     setPrayers(prev => prev.filter(p => p.id !== String(id)));
     await supabase.from('prayers').delete().eq('id', String(id));
@@ -352,13 +360,17 @@ export default function App() {
           <TouchableOpacity style={styles.roleItem} onPress={() => { setCurrentRole('pastor'); setShowRoleSelector(false); }}>
             <Text style={styles.roleItemText}>👑 1. Pastor (Acceso y Control Total)</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.roleItem} onPress={() => { setCurrentRole('secretario'); setShowRoleSelector(false); setActiveTab('live'); }}>
-            <Text style={styles.roleItemText}>📋 2. Secretario(a) (Transmisión, Comités, Cultos + Finanzas ver)</Text>
+          <TouchableOpacity style={styles.roleItem} onPress={() => { 
+            setCurrentRole('secretario'); 
+            setShowRoleSelector(false); 
+            setActiveTab('live'); 
+          }}>
+            <Text style={styles.roleItemText}>📋 2. Secretario(a) (Sin oración, finanzas ver)</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.roleItem} onPress={() => { 
             setCurrentRole('tesorero'); 
             setShowRoleSelector(false); 
-            setActiveTab('finance'); // Salta a tesorería al cambiar a tesorero
+            setActiveTab('finance'); 
           }}>
             <Text style={styles.roleItemText}>💰 3. Tesorero(a) (Finanzas total + Vistas sin oración)</Text>
           </TouchableOpacity>
@@ -508,8 +520,8 @@ export default function App() {
             </ScrollView>
           )}
 
-          {/* MÓDULO DE PETICIONES DE ORACIÓN */}
-          {activeTab === 'prayers' && currentRole !== 'tesorero' && (
+          {/* MÓDULO DE PETICIONES DE ORACIÓN (Oculto para tesorero y secretario) */}
+          {activeTab === 'prayers' && currentRole !== 'tesorero' && currentRole !== 'secretario' && (
             <ScrollView style={styles.content}>
               <Text style={styles.sectionTitle}>🙏 Red de Oración Congregacional</Text>
               
@@ -537,7 +549,7 @@ export default function App() {
                         <View style={styles.activePrayerBadge}><Text style={styles.activePrayerBadgeText}>🟡 EN ORACIÓN</Text></View>
                       )}
                     </View>
-                    {(currentRole === 'pastor' || currentRole === 'secretario' || (currentRole === 'general' && myLocalPrayerIds.includes(String(p.id)))) && (
+                    {(currentRole === 'pastor' || (currentRole === 'general' && myLocalPrayerIds.includes(String(p.id)))) && (
                       <TouchableOpacity onPress={() => handleDeletePrayer(p.id)}>
                         <Text style={{ color: '#ff0055', fontWeight: 'bold' }}>✕</Text>
                       </TouchableOpacity>
@@ -550,7 +562,7 @@ export default function App() {
                       <Text style={styles.supportBtnText}>🙏 Me uno en oración ({p.count || 0})</Text>
                     </TouchableOpacity>
                     
-                    {(currentRole === 'pastor' || currentRole === 'secretario') && (
+                    {currentRole === 'pastor' && (
                       <TouchableOpacity style={styles.statusToggleBtn} onPress={() => togglePrayerStatus(p)}>
                         <Text style={styles.statusToggleText}>
                           {p.status === 'answered' ? '🔄 Marcar en Oración' : '✅ Marcar Respondida'}
@@ -842,6 +854,6 @@ const styles = StyleSheet.create({
   supportBtnText: { color: '#00ffcc', fontSize: 12, fontWeight: 'bold' },
   statusToggleBtn: { paddingHorizontal: 8, paddingVertical: 6 },
   statusToggleText: { color: '#9ca3af', fontSize: 12, fontWeight: '600' },
-  eventDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#00ffcc',marginTop: 2 },
+  eventDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#00ffcc', marginTop: 2 },
   selectedEventDot: { backgroundColor: '#0b0f19' }
 });
