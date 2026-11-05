@@ -27,17 +27,15 @@ if (Platform.OS !== 'web') {
 export default function App() {
   const [currentRole, setCurrentRole] = useState(null);
   
-  // Estados para el Modal de Nombre (Invitado / General)
   const [showGeneralModal, setShowGeneralModal] = useState(false);
   const [generalUserName, setGeneralUserName] = useState('');
 
-  // Estados para el Modal de Contraseña Administrativa
   const [targetRoleToLogin, setTargetRoleToLogin] = useState(null);
   const [passwordInput, setPasswordInput] = useState('');
   
-  // Claves genéricas actualizadas
+  // Claves actualizadas (Pastor: 6789)
   const [accessKeys, setAccessKeys] = useState({
-    pastor: '7777',
+    pastor: '6789',
     secretario: '5555',
     tesorero: '3333'
   });
@@ -234,7 +232,6 @@ export default function App() {
     if (newPrayerRequest.trim() === '') return;
     const newId = String(Date.now());
     
-    // Si es general, toma el nombre digitado en el modal o "Anónimo"
     const authorName = currentRole === 'general' ? (generalUserName.trim() || 'Anónimo') : (newPrayerName.trim() || 'Anónimo');
 
     const newObj = { 
@@ -397,7 +394,6 @@ export default function App() {
           </View>
         </View>
 
-        {/* MODAL PARA PEDIR NOMBRE AL INGRESAR COMO GENERAL */}
         <Modal visible={showGeneralModal} transparent animationType="fade">
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
@@ -432,7 +428,6 @@ export default function App() {
           </View>
         </Modal>
 
-        {/* MODAL DE INGRESO DE CONTRASEÑA ADMINISTRATIVA */}
         <Modal visible={targetRoleToLogin !== null} transparent animationType="fade">
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
