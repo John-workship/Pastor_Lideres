@@ -33,7 +33,7 @@ export default function App() {
   const [targetRoleToLogin, setTargetRoleToLogin] = useState(null);
   const [passwordInput, setPasswordInput] = useState('');
   
-  // Claves actualizadas (Pastor: 6789)
+  // Claves configuradas (Pastor: 6789)
   const [accessKeys, setAccessKeys] = useState({
     pastor: '6789',
     secretario: '5555',
@@ -141,7 +141,7 @@ export default function App() {
       if (prayersData && prayersData.length > 0) {
         setPrayers(prayersData.map(p => ({
           ...p,
-          status: p.status || 'active',
+          status: p.status || 'active', // Por defecto inicia activa (En oración)
           count: p.count || 0
         })));
       }
@@ -238,7 +238,7 @@ export default function App() {
       id: newId, 
       name: authorName, 
       request: newPrayerRequest.trim(),
-      status: 'active',
+      status: 'active', // Garantiza que nazca en estado "En oración"
       count: 1
     };
 
@@ -259,6 +259,7 @@ export default function App() {
 
   const togglePrayerStatus = async (item) => {
     if (currentRole === 'general' || currentRole === 'tesorero' || currentRole === 'secretario') return;
+    // Si está activa pasa a 'answered', si ya estaba respondida regresa a 'active'
     const newStatus = item.status === 'answered' ? 'active' : 'answered';
     setPrayers(prev => prev.map(p => p.id === item.id ? { ...p, status: newStatus } : p));
     await supabase.from('prayers').update({ status: newStatus }).eq('id', item.id);
