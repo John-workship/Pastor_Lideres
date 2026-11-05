@@ -104,6 +104,10 @@ export default function App() {
   const [newPrayerName, setNewPrayerName] = useState('');
   const [newPrayerRequest, setNewPrayerRequest] = useState('');
   const [myLocalPrayerIds, setMyLocalPrayerIds] = useState([]);
+  
+  // Estados para controlar la edición de una petición existente
+  const [editingPrayerId, setEditingPrayerId] = useState(null);
+  const [editingPrayerText, setEditingPrayerText] = useState('');
 
   const [comitesList, setComitesList] = useState([]);
   const [showComiteForm, setShowComiteForm] = useState(false);
@@ -248,6 +252,15 @@ export default function App() {
     await supabase.from('prayers').insert([newObj]);
     setNewPrayerName('');
     setNewPrayerRequest('');
+  };
+
+  // Función para guardar los cambios de una petición editada
+  const handleSaveEditedPrayer = async (id) => {
+    if (!editingPrayerText.trim()) return;
+    setPrayers(prev => prev.map(p => p.id === id ? { ...p, request: editingPrayerText.trim() } : p));
+    await supabase.from('prayers').update({ request: editingPrayerText.trim() }).eq('id', id);
+    setEditingPrayerId(null);
+    setEditingPrayerText('');
   };
 
   const handleSupportPrayer = async (item) => {
@@ -650,45 +663,81 @@ export default function App() {
                 </TouchableOpacity>
               </View>
 
-              {prayers
-                .filter(p => {
-                  if (currentRole !== 'general') return true;
-                  return myLocalPrayerIds.includes(String(p.id)) || p.name === 'Anónimo';
-                })
-                .map(p => (
-                <View key={p.id} style={[styles.card, p.status === 'answered' && styles.answeredCard]}>
-                  <View style={styles.cardHeaderRow}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Text style={styles.cardTitle}>{currentRole === 'general' && !myLocalPrayerIds.includes(String(p.id)) ? 'Petición Congregacional' : p.name}</Text>
-                      {p.status === 'answered' ? (
-                        <View style={styles.answeredBadge}><Text style={styles.answeredBadgeText}>✨ RESPONDIDA</Text></View>
-                      ) : (
-                        <View style={styles.activePrayerBadge}><Text style={styles.activePrayerBadgeText}>🟡 EN ORACIÓN</Text></View>
+              {prayers.map(p => {
+                const isMyPrayer = currentRole === 'general' && myLocalPrayerIds.includes(String(p.id));
+                const isEditingThis = editingPrayerId === p.id;
+
+                return (
+                  <View key={p.id} style={[styles.card, p.status === 'answered' && styles.answeredCard]}>
+                    <View style={styles.cardHeaderRow}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Text style={styles.cardTitle}>{p.name}</Text>
+                        {p.status === 'answered' ? (
+                          <View style={styles.answeredBadge}><Text style={styles.answeredBadgeText}>✨ RESPONDIDA</Text></View>
+                        ) : (
+                          <View style={styles.activePrayerBadge}><Text style={styles.activePrayerBadgeText}>🟡 EN ORACIÓN</Text></View>
+                        )}
+                      </View>
+                      
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        {/* Botón de editar visible solo para el autor de la petición o el pastor */}
+                        {(currentRole === 'pastor' || isMyPrayer) && !isEditingThis && (
+                          <TouchableOpacity onPress={() => { setEditingPrayerId(p.id); setEditingPrayerText(p.request); }}>
+                            <Text style={{ color: '#00ffcc', fontWeight: 'bold', fontSize: 12 }}>✏️ Editar</Text>
+                          </TouchableOpacity>
+                        )}
+                        {(currentRole === 'pastor' || isMyPrayer) && (
+                          <TouchableOpacity onPress={() => handleDeletePrayer(p.id)}>
+                            <Text style={{ color: '#ff0055', fontWeight: 'bold' }}>✕</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </View>
+
+                    {/* Si está en modo edición, muestra un input para corregir */}
+                    {isEditingThis ? (
+                      <View style={{ marginTop: 8 }}>
+                        <TextInput 
+                          style={[styles.input, { height: 70, marginBottom: 6 }]} 
+                          value={editingPrayerText} 
+                          onChangeText={setEditingPrayerText} 
+                          multiline 
+                        />
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                          <TouchableOpacity 
+                            style={[styles.actionBtn, { backgroundColor: '#374151', flex: 1, padding: 8 }]} 
+                            onPress={() => setEditingPrayerId(null)}
+                          >
+                            <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>Cancelar</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity 
+                            style={[styles.actionBtn, { flex: 1, padding: 8 }]} 
+                            onPress={() => handleSaveEditedPrayer(p.id)}
+                          >
+                            <Text style={{ color: '#0b0f19', fontSize: 12, fontWeight: 'bold' }}>Guardar</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ) : (
+                      <Text style={styles.cardSub}>{p.request}</Text>
+                    )}
+                    
+                    <View style={styles.prayerActionRow}>
+                      <TouchableOpacity style={styles.supportBtn} onPress={() => handleSupportPrayer(p)}>
+                        <Text style={styles.supportBtnText}>🙏 Me uno en oración ({p.count || 0})</Text>
+                      </TouchableOpacity>
+                      
+                      {currentRole === 'pastor' && (
+                        <TouchableOpacity style={styles.statusToggleBtn} onPress={() => togglePrayerStatus(p)}>
+                          <Text style={styles.statusToggleText}>
+                            {p.status === 'answered' ? '🔄 Marcar en Oración' : '✅ Marcar Respondida'}
+                          </Text>
+                        </TouchableOpacity>
                       )}
                     </View>
-                    {(currentRole === 'pastor' || (currentRole === 'general' && myLocalPrayerIds.includes(String(p.id)))) && (
-                      <TouchableOpacity onPress={() => handleDeletePrayer(p.id)}>
-                        <Text style={{ color: '#ff0055', fontWeight: 'bold' }}>✕</Text>
-                      </TouchableOpacity>
-                    )}
                   </View>
-                  <Text style={styles.cardSub}>{p.request}</Text>
-                  
-                  <View style={styles.prayerActionRow}>
-                    <TouchableOpacity style={styles.supportBtn} onPress={() => handleSupportPrayer(p)}>
-                      <Text style={styles.supportBtnText}>🙏 Me uno en oración ({p.count || 0})</Text>
-                    </TouchableOpacity>
-                    
-                    {currentRole === 'pastor' && (
-                      <TouchableOpacity style={styles.statusToggleBtn} onPress={() => togglePrayerStatus(p)}>
-                        <Text style={styles.statusToggleText}>
-                          {p.status === 'answered' ? '🔄 Marcar en Oración' : '✅ Marcar Respondida'}
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                </View>
-              ))}
+                );
+              })}
             </ScrollView>
           )}
 
@@ -1028,7 +1077,7 @@ const styles = StyleSheet.create({
   metricLabel: { fontSize: 12, color: '#9ca3af', fontWeight: '600' },
   metricValue: { fontSize: 18, fontWeight: 'bold', marginTop: 4 },
   daysScroll: { flexDirection: 'row', marginVertical: 8 },
-  dayBox: { width: 44, height: 48, backgroundColor: '#111827', justifyContent: 'center', alignItems: 'center', borderRadius: 10, borderWidth: 1.5, borderColor: '#1f2937', marginRight: 6 },
+  dayBox: { width: 44, height: 48, backgroundColor: '#111827', justifyContent: 'center', alignItems: 'center', borderRadius: 10, borderWidth: 1.5, borderColor: '#374151', marginRight: 6 },
   selectedDayBox: { backgroundColor: '#00ffcc', borderColor: '#00ffcc' },
   dayText: { fontSize: 14, fontWeight: 'bold', color: '#d1d5db' },
   selectedDayText: { color: '#0b0f19' },
