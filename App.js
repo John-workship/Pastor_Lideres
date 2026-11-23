@@ -69,6 +69,14 @@ export default function App() {
   const [generatedInviteLinks, setGeneratedInviteLinks] = useState([]);
   const [leadersLoading, setLeadersLoading] = useState(false);
   const [leadersMessage, setLeadersMessage] = useState('');
+  const [accessUsers, setAccessUsers] = useState([]);
+  const [accessDrafts, setAccessDrafts] = useState({});
+  const [accessLoading, setAccessLoading] = useState(false);
+  const [accessMessage, setAccessMessage] = useState('');
+  const [communityLink, setCommunityLink] = useState({ id: 'amanecer_con_fe', title: 'Amanecer con Fe', description: 'Encuentro diario de oración. Conéctate y comparte este tiempo con la iglesia.', url: 'https://meet.google.com/suz-kcxq-oip', active: true });
+  const [communityLinkDraft, setCommunityLinkDraft] = useState(null);
+  const [communityLinkLoading, setCommunityLinkLoading] = useState(false);
+  const [communityLinkMessage, setCommunityLinkMessage] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [isProjectorMode, setIsProjectorMode] = useState(false);
   
@@ -125,7 +133,7 @@ export default function App() {
     ];
   };
 
-  const dashboardItems = getRoleDashboardItems();
+  const dashboardItems = [...getRoleDashboardItems(), { key: 'amanecer', title: 'Amanecer con Fe', subtitle: 'Conéctate cada día al encuentro de oración', icon: '🌅', color: '#fbbf24' }];
 
   const [sedesList, setSedesList] = useState([
     { id: '1', nombre: 'IPUC Mosquera Tercera', url: '', isLive: false }
@@ -333,6 +341,92 @@ export default function App() {
   useEffect(() => {
     if (activeTab === 'leaders') loadLeaderManagement();
   }, [activeTab, currentRole]);
+
+  const loadAccessManagement = async () => {
+    if (currentRole !== 'pastor') return;
+    setAccessLoading(true);
+    setAccessMessage('');
+    const { data, error } = await supabase.rpc('admin_list_user_access');
+    if (error) {
+      setAccessMessage('No fue posible cargar los accesos: ' + error.message);
+    } else {
+      const rows = data || [];
+      setAccessUsers(rows);
+      setAccessDrafts(Object.fromEntries(rows.map(user => [user.user_id, {
+        display_name: user.display_name || '',
+        role: user.role,
+        must_change_password: !!user.must_change_password
+      }])));
+    }
+    setAccessLoading(false);
+  };
+
+  useEffect(() => {
+    if (activeTab === 'users' && currentRole === 'pastor') loadAccessManagement();
+  }, [activeTab, currentRole]);
+
+  const saveAccessUser = async (user) => {
+    if (currentRole !== 'pastor' || !currentUser || user.user_id === currentUser.id || user.role === 'pastor') return;
+    const draft = accessDrafts[user.user_id] || user;
+    setAccessLoading(true);
+    setAccessMessage('');
+    const { error } = await supabase.rpc('admin_update_user_access', {
+      p_user_id: user.user_id,
+      p_display_name: draft.display_name || '',
+      p_role: draft.role,
+      p_must_change_password: !!draft.must_change_password
+    });
+    if (error) {
+      setAccessMessage('No se pudieron guardar los cambios: ' + error.message);
+      setAccessLoading(false);
+      return;
+    }
+    setAccessMessage('Acceso actualizado para ' + user.email + '.');
+    await loadAccessManagement();
+  };
+
+  const loadCommunityLink = async () => {
+    const { data, error } = await supabase.from('community_links').select('*').eq('id', 'amanecer_con_fe').maybeSingle();
+    if (error) {
+      setCommunityLinkMessage('No fue posible cargar el enlace: ' + error.message);
+      return;
+    }
+    if (data) {
+      setCommunityLink(data);
+      setCommunityLinkDraft({ title: data.title, description: data.description || '', url: data.url, active: !!data.active });
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'amanecer') loadCommunityLink();
+  }, [activeTab]);
+
+  const saveCommunityLink = async () => {
+    if (currentRole !== 'pastor' || !currentUser || !communityLinkDraft) return;
+    const url = (communityLinkDraft.url || '').trim();
+    if (!/^https:\/\//i.test(url)) {
+      setCommunityLinkMessage('El enlace debe comenzar por https://');
+      return;
+    }
+    setCommunityLinkLoading(true);
+    setCommunityLinkMessage('');
+    const { data, error } = await supabase.from('community_links').update({
+      title: (communityLinkDraft.title || '').trim() || 'Amanecer con Fe',
+      description: (communityLinkDraft.description || '').trim(),
+      url,
+      active: !!communityLinkDraft.active,
+      updated_by: currentUser.id,
+      updated_at: new Date().toISOString()
+    }).eq('id', 'amanecer_con_fe').select('*').single();
+    if (error) {
+      setCommunityLinkMessage('No se pudo guardar el enlace: ' + error.message);
+    } else {
+      setCommunityLink(data);
+      setCommunityLinkDraft({ title: data.title, description: data.description || '', url: data.url, active: !!data.active });
+      setCommunityLinkMessage('Amanecer con Fe quedó actualizado para toda la congregación.');
+    }
+    setCommunityLinkLoading(false);
+  };
 
   const handleCreateLeaderCampaign = async () => {
     if (!['pastor', 'secretario'].includes(currentRole) || !newCampaignTitle.trim()) return;
@@ -1322,6 +1416,109 @@ export default function App() {
                 })}
               </View>
               {!!leadersMessage && <Text style={styles.cardSub}>{leadersMessage}</Text>}
+            </ScrollView>
+          )}
+
+          {activeTab === 'users' && currentRole === 'pastor' && (
+            <ScrollView style={styles.content}>
+              <Text style={styles.sectionTitle}>🔐 Gestión de Accesos</Text>
+              <Text style={styles.cardSub}>Administración de cuentas y perfiles. La cuenta del Pastor y tu propio acceso están protegidos.</Text>
+              {accessLoading && <Text style={styles.cardSub}>Cargando usuarios…</Text>}
+              {accessUsers.map(user => {
+                const draft = accessDrafts[user.user_id] || { display_name: user.display_name || '', role: user.role, must_change_password: !!user.must_change_password };
+                const protectedAccount = user.role === 'pastor' || user.user_id === currentUser?.id;
+                const roleNames = { pastor: 'Pastor', secretario: 'Secretaría', tesorero: 'Tesorería', lideres: 'Líder' };
+                return (
+                  <View key={user.user_id} style={styles.card}>
+                    <Text style={styles.cardTitle}>{user.email}</Text>
+                    <Text style={styles.cardSub}>Cuenta creada: {user.created_at ? new Date(user.created_at).toLocaleDateString('es-CO') : '—'}</Text>
+                    <Text style={{ color: '#cbd5e1', fontSize: 12, marginTop: 10, marginBottom: 6 }}>Nombre visible</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={draft.display_name || ''}
+                      placeholder="Nombre para mostrar"
+                      placeholderTextColor="#8492a6"
+                      editable={!protectedAccount}
+                      onChangeText={value => setAccessDrafts(prev => ({ ...prev, [user.user_id]: { ...draft, display_name: value } }))}
+                    />
+                    <Text style={{ color: '#cbd5e1', fontSize: 12, marginBottom: 8 }}>Perfil asignado: {roleNames[draft.role] || draft.role}</Text>
+                    {!protectedAccount && (
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                        {['secretario', 'tesorero', 'lideres'].map(role => (
+                          <TouchableOpacity
+                            key={role}
+                            onPress={() => setAccessDrafts(prev => ({ ...prev, [user.user_id]: { ...draft, role } }))}
+                            style={{ paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, backgroundColor: draft.role === role ? '#0f766e' : '#202d40', borderWidth: 1, borderColor: draft.role === role ? '#2dd4bf' : '#344256' }}
+                          >
+                            <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>{roleNames[role]}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                      <View style={{ flex: 1, paddingRight: 12 }}>
+                        <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>Exigir cambio de contraseña</Text>
+                        <Text style={styles.cardSub}>Se solicitará al próximo ingreso</Text>
+                      </View>
+                      <Switch
+                        value={!!draft.must_change_password}
+                        disabled={protectedAccount}
+                        onValueChange={value => setAccessDrafts(prev => ({ ...prev, [user.user_id]: { ...draft, must_change_password: value } }))}
+                        trackColor={{ false: '#475569', true: '#0f766e' }}
+                        thumbColor={draft.must_change_password ? '#2dd4bf' : '#e2e8f0'}
+                      />
+                    </View>
+                    {protectedAccount ? (
+                      <Text style={{ color: '#9ca3af', fontSize: 12 }}>Cuenta protegida · sin edición desde este módulo</Text>
+                    ) : (
+                      <TouchableOpacity style={styles.actionBtn} onPress={() => saveAccessUser(user)} disabled={accessLoading}>
+                        <Text style={styles.actionBtnText}>Guardar cambios de acceso</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                );
+              })}
+              {!accessLoading && accessUsers.length === 0 && <View style={styles.card}><Text style={styles.cardSub}>No se encontraron perfiles registrados.</Text></View>}
+              {!!accessMessage && <Text style={styles.cardSub}>{accessMessage}</Text>}
+              <TouchableOpacity style={[styles.addSedeToggleBtn, { marginTop: 8 }]} onPress={loadAccessManagement} disabled={accessLoading}>
+                <Text style={styles.addSedeToggleText}>Actualizar lista de usuarios</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          )}
+
+          {activeTab === 'amanecer' && (
+            <ScrollView style={styles.content}>
+              <Text style={styles.sectionTitle}>🌅 Amanecer con Fe</Text>
+              <Text style={styles.cardSub}>Un espacio diario para comenzar el día en oración y comunión con la iglesia.</Text>
+              <View style={[styles.card, { marginTop: 14, borderColor: '#8b6b25' }]}>
+                <Text style={styles.cardTitle}>{communityLink.title || 'Amanecer con Fe'}</Text>
+                <Text style={styles.cardSub}>{communityLink.description || 'Encuentro diario de oración.'}</Text>
+                {communityLink.active && communityLink.url ? (
+                  <TouchableOpacity style={[styles.actionBtn, { marginTop: 16 }]} onPress={() => Linking.openURL(communityLink.url).catch(() => setCommunityLinkMessage('No se pudo abrir el enlace. Abre la URL directamente en tu navegador.'))}>
+                    <Text style={styles.actionBtnText}>🔗 Conectarme a Amanecer con Fe</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <Text style={{ color: '#fbbf24', marginTop: 12, fontSize: 13 }}>El enlace de la reunión no está disponible en este momento.</Text>
+                )}
+                <Text style={[styles.cardSub, { marginTop: 12 }]}>Enlace actual: {communityLink.url || 'Sin configurar'}</Text>
+              </View>
+              {currentRole === 'pastor' && (
+                <View style={styles.card}>
+                  <Text style={styles.cardTitle}>Administrar encuentro diario</Text>
+                  <Text style={styles.cardSub}>Los cambios se reflejan para todos los usuarios de la congregación.</Text>
+                  <TextInput style={styles.input} value={communityLinkDraft?.title || ''} placeholder="Nombre del encuentro" placeholderTextColor="#8492a6" onChangeText={value => setCommunityLinkDraft(prev => ({ ...(prev || communityLink), title: value }))} />
+                  <TextInput style={styles.input} value={communityLinkDraft?.description || ''} placeholder="Descripción" placeholderTextColor="#8492a6" multiline onChangeText={value => setCommunityLinkDraft(prev => ({ ...(prev || communityLink), description: value }))} />
+                  <TextInput style={styles.input} value={communityLinkDraft?.url || ''} placeholder="Enlace de Google Meet u otra plataforma" placeholderTextColor="#8492a6" autoCapitalize="none" keyboardType="url" onChangeText={value => setCommunityLinkDraft(prev => ({ ...(prev || communityLink), url: value }))} />
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>Mostrar a la congregación</Text>
+                    <Switch value={!!communityLinkDraft?.active} onValueChange={value => setCommunityLinkDraft(prev => ({ ...(prev || communityLink), active: value }))} trackColor={{ false: '#475569', true: '#0f766e' }} thumbColor={communityLinkDraft?.active ? '#2dd4bf' : '#e2e8f0'} />
+                  </View>
+                  <TouchableOpacity style={styles.actionBtn} onPress={saveCommunityLink} disabled={communityLinkLoading || !communityLinkDraft}>
+                    <Text style={styles.actionBtnText}>{communityLinkLoading ? 'Guardando…' : 'Guardar enlace para todos'}</Text>
+                  </TouchableOpacity>
+                  {!!communityLinkMessage && <Text style={styles.cardSub}>{communityLinkMessage}</Text>}
+                </View>
+              )}
             </ScrollView>
           )}
 
