@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, 
-  Text, 
+  Text,
+  Image, 
   View, 
   TouchableOpacity, 
   ScrollView, 
@@ -78,6 +79,7 @@ export default function App() {
   const [communityLinkDraft, setCommunityLinkDraft] = useState(null);
   const [communityLinkLoading, setCommunityLinkLoading] = useState(false);
   const [communityLinkMessage, setCommunityLinkMessage] = useState('');
+  const [communityImageLoading, setCommunityImageLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [isProjectorMode, setIsProjectorMode] = useState(false);
   
@@ -401,6 +403,49 @@ export default function App() {
   useEffect(() => {
     if (activeTab === 'amanecer') loadCommunityLink();
   }, [activeTab]);
+
+  const chooseCommunityImage = () => {
+    if (!['pastor', 'lideres'].includes(currentRole) || !currentUser) return;
+    if (Platform.OS !== 'web' || typeof document === 'undefined') {
+      setCommunityLinkMessage('La carga de imágenes está disponible desde la versión web de IPUC Líderes.');
+      return;
+    }
+    const picker = document.createElement('input');
+    picker.type = 'file';
+    picker.accept = 'image/jpeg,image/png,image/webp';
+    picker.onchange = async () => {
+      const file = picker.files?.[0];
+      if (!file) return;
+      if (file.size > 10 * 1024 * 1024) {
+        setCommunityLinkMessage('La imagen supera el máximo permitido de 10 MB.');
+        return;
+      }
+      if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+        setCommunityLinkMessage('Usa una imagen JPG, PNG o WEBP.');
+        return;
+      }
+      setCommunityImageLoading(true);
+      setCommunityLinkMessage('Subiendo imagen…');
+      try {
+        const extension = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
+        const path = currentUser.id + '/banner.' + extension;
+        const { error: uploadError } = await supabase.storage.from('amanecer-con-fe').upload(path, file, {
+          cacheControl: '3600', contentType: file.type, upsert: true
+        });
+        if (uploadError) throw uploadError;
+        const { data: publicData } = supabase.storage.from('amanecer-con-fe').getPublicUrl(path);
+        const { error: saveError } = await supabase.rpc('set_amanecer_image', { p_image_url: publicData.publicUrl });
+        if (saveError) throw saveError;
+        await loadCommunityLink();
+        setCommunityLinkMessage('Imagen de Amanecer con Fe actualizada para toda la congregación.');
+      } catch (error) {
+        setCommunityLinkMessage('No se pudo guardar la imagen: ' + (error?.message || 'Error inesperado'));
+      } finally {
+        setCommunityImageLoading(false);
+      }
+    };
+    picker.click();
+  };
 
   const copyCommunityLink = async () => {
     const url = (communityLink?.url || '').trim();
@@ -1523,6 +1568,18 @@ export default function App() {
               <View style={[styles.card, { marginTop: 14, borderColor: '#8b6b25' }]}>
                 <Text style={styles.cardTitle}>{communityLink.title || 'Amanecer con Fe'}</Text>
                 <Text style={styles.cardSub}>{communityLink.description || 'Encuentro diario de oración.'}</Text>
+                {communityLink.image_url ? (
+                  <Image source={{ uri: communityLink.image_url }} style={{ width: '100%', height: 230, borderRadius: 12, marginTop: 12, backgroundColor: '#111827' }} resizeMode="cover" />
+                ) : (
+                  <View style={{ height: 110, marginTop: 12, borderRadius: 12, borderWidth: 1, borderColor: '#475569', borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', padding: 12 }}>
+                    <Text style={{ color: '#94a3b8', textAlign: 'center' }}>Aún no se ha publicado una imagen distintiva para este periodo.</Text>
+                  </View>
+                )}
+                {['pastor', 'lideres'].includes(currentRole) && (
+                  <TouchableOpacity style={[styles.actionBtn, { marginTop: 12, backgroundColor: '#26364d', borderWidth: 1, borderColor: '#fbbf24' }]} onPress={chooseCommunityImage} disabled={communityImageLoading}>
+                    <Text style={{ color: '#fbbf24', fontWeight: 'bold', fontSize: 14 }}>{communityImageLoading ? 'Subiendo imagen…' : communityLink.image_url ? '🖼️ Cambiar imagen del liderazgo' : '🖼️ Subir imagen del liderazgo'}</Text>
+                  </TouchableOpacity>
+                )}
                 {communityLink.active && communityLink.url ? (
                   <>
                     <TouchableOpacity style={[styles.actionBtn, { marginTop: 16 }]} onPress={() => Linking.openURL(communityLink.url).catch(() => setCommunityLinkMessage('No se pudo abrir el enlace. Abre la URL directamente en tu navegador.'))}>
