@@ -1524,12 +1524,14 @@ export default function App() {
                 <Text style={styles.cardTitle}>{communityLink.title || 'Amanecer con Fe'}</Text>
                 <Text style={styles.cardSub}>{communityLink.description || 'Encuentro diario de oración.'}</Text>
                 {communityLink.active && communityLink.url ? (
-                  <TouchableOpacity style={[styles.actionBtn, { marginTop: 16 }]} onPress={() => Linking.openURL(communityLink.url).catch(() => setCommunityLinkMessage('No se pudo abrir el enlace. Abre la URL directamente en tu navegador.'))}>
-                    <Text style={styles.actionBtnText}>🔗 Conectarme a Amanecer con Fe</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[styles.actionBtn, { marginTop: 10, backgroundColor: '#26364d', borderWidth: 1, borderColor: '#fbbf24' }]} onPress={copyCommunityLink}>
-                    <Text style={{ color: '#fbbf24', fontWeight: 'bold', fontSize: 14 }}>📋 Copiar enlace para compartir</Text>
-                  </TouchableOpacity>
+                  <>
+                    <TouchableOpacity style={[styles.actionBtn, { marginTop: 16 }]} onPress={() => Linking.openURL(communityLink.url).catch(() => setCommunityLinkMessage('No se pudo abrir el enlace. Abre la URL directamente en tu navegador.'))}>
+                      <Text style={styles.actionBtnText}>🔗 Conectarme a Amanecer con Fe</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.actionBtn, { marginTop: 10, backgroundColor: '#26364d', borderWidth: 1, borderColor: '#fbbf24' }]} onPress={copyCommunityLink}>
+                      <Text style={{ color: '#fbbf24', fontWeight: 'bold', fontSize: 14 }}>📋 Copiar enlace para compartir</Text>
+                    </TouchableOpacity>
+                  </>
                 ) : (
                   <Text style={{ color: '#fbbf24', marginTop: 12, fontSize: 13 }}>El enlace de la reunión no está disponible en este momento.</Text>
                 )}
