@@ -36,6 +36,10 @@ export default function App() {
   const [authPassword, setAuthPassword] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [passwordChangeError, setPasswordChangeError] = useState('');
+  const [passwordChangeLoading, setPasswordChangeLoading] = useState(false);
   const [showGeneralModal, setShowGeneralModal] = useState(false);
   const [showAdminSelectionModal, setShowAdminSelectionModal] = useState(false);
   const [generalFirstName, setGeneralFirstName] = useState('');
@@ -226,7 +230,7 @@ export default function App() {
       const user = session?.user || null;
       setCurrentUser(user);
       if (!user) { setCurrentProfile(null); setCurrentRole(null); return; }
-      const { data, error } = await supabase.from('profiles').select('role, display_name').eq('id', user.id).single();
+      const { data, error } = await supabase.from('profiles').select('role, display_name, must_change_password').eq('id', user.id).single();
       if (!mounted) return;
       if (error || !data) { setCurrentProfile(null); setCurrentRole(null); return; }
       setCurrentProfile(data); setCurrentRole(data.role);
@@ -242,12 +246,38 @@ export default function App() {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email: authEmail.trim().toLowerCase(), password: authPassword });
       if (error) throw error;
-      const { data: profileData, error: profileError } = await supabase.from('profiles').select('role, display_name').eq('id', data.user.id).single();
+      const { data: profileData, error: profileError } = await supabase.from('profiles').select('role, display_name, must_change_password').eq('id', data.user.id).single();
       if (profileError || !profileData) { await supabase.auth.signOut(); throw new Error('Esta cuenta aún no tiene un perfil administrativo habilitado. Contacta al administrador.'); }
       if (!['pastor', 'secretario', 'tesorero', 'lideres'].includes(profileData.role)) { await supabase.auth.signOut(); throw new Error('Esta cuenta no tiene permisos administrativos asignados.'); }
       setCurrentUser(data.user); setCurrentProfile(profileData); setCurrentRole(profileData.role); setActiveTab('home'); setAuthPassword(''); setShowAdminSelectionModal(false);
     } catch (error) { setAuthError(error?.message || 'No fue posible iniciar sesión.'); }
     finally { setAuthLoading(false); }
+  };
+
+  const handleFirstPasswordChange = async () => {
+    setPasswordChangeError('');
+    if (newPassword.length < 12) {
+      setPasswordChangeError('La nueva contraseña debe tener al menos 12 caracteres.');
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setPasswordChangeError('Las contraseñas no coinciden.');
+      return;
+    }
+    setPasswordChangeLoading(true);
+    try {
+      const { error: passwordError } = await supabase.auth.updateUser({ password: newPassword });
+      if (passwordError) throw passwordError;
+      const { error: completionError } = await supabase.rpc('complete_password_setup');
+      if (completionError) throw completionError;
+      setCurrentProfile(prev => ({ ...prev, must_change_password: false }));
+      setNewPassword('');
+      setConfirmNewPassword('');
+    } catch (error) {
+      setPasswordChangeError(error?.message || 'No fue posible actualizar la contraseña.');
+    } finally {
+      setPasswordChangeLoading(false);
+    }
   };
 
   const handleSignOut = async () => {
@@ -578,6 +608,52 @@ export default function App() {
             </View>
           </View>
         </Modal>
+      </SafeAreaView>
+    );
+  }
+
+  if (currentUser && currentProfile?.must_change_password) {
+    return (
+      <SafeAreaView style={styles.welcomeContainer}>
+        <View style={styles.welcomeCard}>
+          <Text style={styles.welcomeEmoji}>🔐</Text>
+          <Text style={styles.welcomeTitle}>Crea tu contraseña personal</Text>
+          <Text style={styles.welcomeSubtitle}>Por seguridad, debes reemplazar la contraseña temporal antes de ingresar a IPUC Líderes.</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Nueva contraseña (mínimo 12 caracteres)"
+            placeholderTextColor="#8492a6"
+            value={newPassword}
+            onChangeText={setNewPassword}
+            secureTextEntry
+            autoCapitalize="none"
+            autoComplete="new-password"
+            textContentType="newPassword"
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Confirma tu nueva contraseña"
+            placeholderTextColor="#8492a6"
+            value={confirmNewPassword}
+            onChangeText={setConfirmNewPassword}
+            secureTextEntry
+            autoCapitalize="none"
+            autoComplete="new-password"
+            textContentType="newPassword"
+            onSubmitEditing={handleFirstPasswordChange}
+          />
+          {!!passwordChangeError && <Text style={styles.authErrorText}>{passwordChangeError}</Text>}
+          <TouchableOpacity
+            style={[styles.actionBtn, passwordChangeLoading && { opacity: 0.6 }]}
+            onPress={handleFirstPasswordChange}
+            disabled={passwordChangeLoading}
+          >
+            <Text style={styles.actionBtnText}>{passwordChangeLoading ? 'Actualizando…' : 'Guardar contraseña y continuar'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.forgotPasswordBtn} onPress={handleSignOut}>
+            <Text style={styles.forgotPasswordText}>Cerrar sesión</Text>
+          </TouchableOpacity>
+        </View>
       </SafeAreaView>
     );
   }
