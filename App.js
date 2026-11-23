@@ -80,6 +80,7 @@ export default function App() {
   const [communityLinkLoading, setCommunityLinkLoading] = useState(false);
   const [communityLinkMessage, setCommunityLinkMessage] = useState('');
   const [communityImageLoading, setCommunityImageLoading] = useState(false);
+  const [communityImageAspect, setCommunityImageAspect] = useState(0.75);
   const [refreshing, setRefreshing] = useState(false);
   const [isProjectorMode, setIsProjectorMode] = useState(false);
   
@@ -1569,7 +1570,15 @@ export default function App() {
                 <Text style={styles.cardTitle}>{communityLink.title || 'Amanecer con Fe'}</Text>
                 <Text style={styles.cardSub}>{communityLink.description || 'Encuentro diario de oración.'}</Text>
                 {communityLink.image_url ? (
-                  <Image source={{ uri: communityLink.image_url }} style={{ width: '100%', height: 230, borderRadius: 12, marginTop: 12, backgroundColor: '#111827' }} resizeMode="cover" />
+                  <Image
+                    source={{ uri: communityLink.image_url }}
+                    style={{ width: '100%', aspectRatio: communityImageAspect, borderRadius: 12, marginTop: 12, backgroundColor: '#111827' }}
+                    resizeMode="contain"
+                    onLoad={(event) => {
+                      const source = event?.nativeEvent?.source;
+                      if (source?.width && source?.height) setCommunityImageAspect(source.width / source.height);
+                    }}
+                  />
                 ) : (
                   <View style={{ height: 110, marginTop: 12, borderRadius: 12, borderWidth: 1, borderColor: '#475569', borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', padding: 12 }}>
                     <Text style={{ color: '#94a3b8', textAlign: 'center' }}>Aún no se ha publicado una imagen distintiva para este periodo.</Text>
