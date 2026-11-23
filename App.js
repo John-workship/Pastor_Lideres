@@ -156,7 +156,9 @@ export default function App() {
         supabase.from('sedes').select('*'),
         supabase.from('prayers').select('*').order('id', { ascending: false }),
         supabase.from('comites').select('*'),
-        supabase.from('finance').select('*'),
+        (['pastor', 'tesorero', 'secretario'].includes(currentRole)
+          ? supabase.from('finance').select('*')
+          : Promise.resolve({ data: [], error: null })),
         supabase.from('events').select('*').order('date', { ascending: true })
       ]);
 
@@ -214,6 +216,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (['pastor', 'tesorero', 'secretario'].includes(currentRole)) fetchData();
+  }, [currentRole]);
+
+  useEffect(() => {
     let mounted = true;
     const syncSession = async (session) => {
       if (!mounted) return;
@@ -239,7 +245,7 @@ export default function App() {
       const { data: profileData, error: profileError } = await supabase.from('profiles').select('role, display_name').eq('id', data.user.id).single();
       if (profileError || !profileData) { await supabase.auth.signOut(); throw new Error('Esta cuenta aún no tiene un perfil administrativo habilitado. Contacta al administrador.'); }
       if (!['pastor', 'secretario', 'tesorero', 'lideres'].includes(profileData.role)) { await supabase.auth.signOut(); throw new Error('Esta cuenta no tiene permisos administrativos asignados.'); }
-      setCurrentUser(data.user); setCurrentProfile(profileData); setCurrentRole(profileData.role); setActiveTab('home'); setAuthPassword(''); setShowAdminSelectionModal(false); fetchData();
+      setCurrentUser(data.user); setCurrentProfile(profileData); setCurrentRole(profileData.role); setActiveTab('home'); setAuthPassword(''); setShowAdminSelectionModal(false);
     } catch (error) { setAuthError(error?.message || 'No fue posible iniciar sesión.'); }
     finally { setAuthLoading(false); }
   };
@@ -326,7 +332,14 @@ export default function App() {
     };
 
     setPrayers(prev => [newObj, ...prev]);
-    await supabase.from('prayers').insert([newObj]);
+    const { error: insertError } = await supabase.from('prayers').insert([{
+      id: newId, name: authorName, request: newPrayerRequest.trim()
+    }]);
+    if (insertError) {
+      setPrayers(prev => prev.filter(p => p.id !== newId));
+      alert('No fue posible publicar la petición. Inténtalo de nuevo.');
+      return;
+    }
     setNewPrayerName('');
     setNewPrayerRequest('');
   };
