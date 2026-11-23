@@ -30,31 +30,17 @@ const formatMonthLabel = (date) => date.toLocaleDateString('es-CO', { month: 'lo
 
 export default function App() {
   const [currentRole, setCurrentRole] = useState(null);
-  
+  const [currentUser, setCurrentUser] = useState(null);
+  const [currentProfile, setCurrentProfile] = useState(null);
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState('');
   const [showGeneralModal, setShowGeneralModal] = useState(false);
   const [showAdminSelectionModal, setShowAdminSelectionModal] = useState(false);
-
   const [generalFirstName, setGeneralFirstName] = useState('');
   const [generalLastName, setGeneralLastName] = useState('');
   const [activeGeneralUsers, setActiveGeneralUsers] = useState([]);
-
-  const [targetRoleToLogin, setTargetRoleToLogin] = useState(null);
-  const [passwordInput, setPasswordInput] = useState('');
-  
-  const [adminRoles, setAdminRoles] = useState([
-    { id: 'pastor', name: 'Pastor', key: '6789', icon: '📖', isVisible: true },
-    { id: 'secretario', name: 'Secretario(a)', key: '5555', icon: '📋', isVisible: true },
-    { id: 'tesorero', name: 'Tesorero(a)', key: '3333', icon: '💰', isVisible: true },
-    { id: 'lideres', name: 'Líderes', key: '1234', icon: '👥', isVisible: false }
-  ]);
-
-  const [editingRoleId, setEditingRoleId] = useState(null);
-  const [tempRoleName, setTempRoleName] = useState('');
-  const [tempRoleKey, setTempRoleKey] = useState('');
-
-  const [showCreateNewRoleForm, setShowCreateNewRoleForm] = useState(false);
-  const [newRoleName, setNewRoleName] = useState('');
-  const [newRoleKey, setNewRoleKey] = useState('');
 
   const [activeTab, setActiveTab] = useState('home');
   const [refreshing, setRefreshing] = useState(false);
@@ -126,7 +112,6 @@ export default function App() {
   const [prayers, setPrayers] = useState([]);
   const [newPrayerName, setNewPrayerName] = useState('');
   const [newPrayerRequest, setNewPrayerRequest] = useState('');
-  const [myLocalPrayerIds, setMyLocalPrayerIds] = useState([]);
   
   const [editingPrayerId, setEditingPrayerId] = useState(null);
   const [editingPrayerText, setEditingPrayerText] = useState('');
@@ -228,17 +213,40 @@ export default function App() {
     fetchData();
   }, []);
 
-  const handleAdminLogin = () => {
-    const foundRole = adminRoles.find(r => r.id === targetRoleToLogin);
-    if (foundRole && passwordInput === foundRole.key) {
-      setCurrentRole(foundRole.id);
-      setActiveTab('home');
-      setTargetRoleToLogin(null);
-      setPasswordInput('');
-      setShowAdminSelectionModal(false);
-    } else {
-      alert('❌ Clave de acceso incorrecta. Inténtalo de nuevo.');
-    }
+  useEffect(() => {
+    let mounted = true;
+    const syncSession = async (session) => {
+      if (!mounted) return;
+      const user = session?.user || null;
+      setCurrentUser(user);
+      if (!user) { setCurrentProfile(null); setCurrentRole(null); return; }
+      const { data, error } = await supabase.from('profiles').select('role, display_name').eq('id', user.id).single();
+      if (!mounted) return;
+      if (error || !data) { setCurrentProfile(null); setCurrentRole(null); return; }
+      setCurrentProfile(data); setCurrentRole(data.role);
+    };
+    supabase.auth.getSession().then(({ data }) => syncSession(data.session)).catch(() => {});
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => Promise.resolve().then(() => syncSession(session)));
+    return () => { mounted = false; authListener.subscription.unsubscribe(); };
+  }, []);
+
+  const handleAdminLogin = async () => {
+    if (!authEmail.trim() || !authPassword) { setAuthError('Ingresa tu correo y contraseña.'); return; }
+    setAuthLoading(true); setAuthError('');
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email: authEmail.trim().toLowerCase(), password: authPassword });
+      if (error) throw error;
+      const { data: profileData, error: profileError } = await supabase.from('profiles').select('role, display_name').eq('id', data.user.id).single();
+      if (profileError || !profileData) { await supabase.auth.signOut(); throw new Error('Esta cuenta aún no tiene un perfil administrativo habilitado. Contacta al administrador.'); }
+      if (!['pastor', 'secretario', 'tesorero', 'lideres'].includes(profileData.role)) { await supabase.auth.signOut(); throw new Error('Esta cuenta no tiene permisos administrativos asignados.'); }
+      setCurrentUser(data.user); setCurrentProfile(profileData); setCurrentRole(profileData.role); setActiveTab('home'); setAuthPassword(''); setShowAdminSelectionModal(false); fetchData();
+    } catch (error) { setAuthError(error?.message || 'No fue posible iniciar sesión.'); }
+    finally { setAuthLoading(false); }
+  };
+
+  const handleSignOut = async () => {
+    if (currentUser) { const { error } = await supabase.auth.signOut(); if (error) alert('No fue posible cerrar sesión: ' + error.message); }
+    setCurrentUser(null); setCurrentProfile(null); setCurrentRole(null); setActiveTab('home'); setAuthPassword(''); setAuthError('');
   };
 
   const handleGeneralLogin = () => {
@@ -261,46 +269,6 @@ export default function App() {
     setCurrentRole('general');
     setActiveTab('home');
     setShowGeneralModal(false);
-  };
-
-  const handleSaveSingleRole = (roleId) => {
-    if (!tempRoleName.trim() || !tempRoleKey.trim()) {
-      alert('⚠️ El nombre y la clave no pueden estar vacíos.');
-      return;
-    }
-    setAdminRoles(prev => prev.map(r => r.id === roleId ? { ...r, name: tempRoleName.trim(), key: tempRoleKey.trim() } : r));
-    setEditingRoleId(null);
-    alert('✅ ¡Perfil actualizado con éxito!');
-  };
-
-  const handleToggleRoleVisibility = (roleId) => {
-    setAdminRoles(prev => prev.map(r => r.id === roleId ? { ...r, isVisible: !r.isVisible } : r));
-  };
-
-  const handleAddNewRole = () => {
-    if (!newRoleName.trim() || !newRoleKey.trim()) {
-      alert('⚠️ Por favor ingresa el nombre del cargo y su respectiva clave.');
-      return;
-    }
-    const newId = newRoleName.trim().toLowerCase().replace(/\s+/g, '_');
-    if (adminRoles.some(r => r.id === newId)) {
-      alert('⚠️ Ya existe un perfil con un nombre similar.');
-      return;
-    }
-
-    setAdminRoles(prev => [...prev, { id: newId, name: newRoleName.trim(), key: newRoleKey.trim(), icon: '👥', isVisible: false }]);
-    setNewRoleName('');
-    setNewRoleKey('');
-    setShowCreateNewRoleForm(false);
-    alert('✅ ¡Nuevo perfil de líderes creado (oculto por defecto)!');
-  };
-
-  const handleDeleteAdminRole = (roleId) => {
-    if (roleId === 'pastor') {
-      alert('⚠️ No se puede eliminar el perfil principal del Pastor.');
-      return;
-    }
-    setAdminRoles(prev => prev.filter(r => r.id !== roleId));
   };
 
   const handleSaveSede = async () => {
@@ -358,16 +326,13 @@ export default function App() {
     };
 
     setPrayers(prev => [newObj, ...prev]);
-    if (currentRole === 'general' || currentRole === 'lideres') {
-      setMyLocalPrayerIds(prev => [...prev, newId]);
-    }
     await supabase.from('prayers').insert([newObj]);
     setNewPrayerName('');
     setNewPrayerRequest('');
   };
 
   const handleSaveEditedPrayer = async (id) => {
-    if (!editingPrayerText.trim()) return;
+    if (currentRole !== 'pastor' || !editingPrayerText.trim()) return;
     setPrayers(prev => prev.map(p => p.id === id ? { ...p, request: editingPrayerText.trim() } : p));
     await supabase.from('prayers').update({ request: editingPrayerText.trim() }).eq('id', id);
     setEditingPrayerId(null);
@@ -375,9 +340,9 @@ export default function App() {
   };
 
   const handleSupportPrayer = async (item) => {
-    const updatedCount = (item.count || 0) + 1;
-    setPrayers(prev => prev.map(p => p.id === item.id ? { ...p, count: updatedCount } : p));
-    await supabase.from('prayers').update({ count: updatedCount }).eq('id', item.id);
+    const { data, error } = await supabase.rpc('increment_prayer_support', { p_prayer_id: String(item.id) });
+    if (error) { alert('No fue posible registrar tu apoyo. Inténtalo de nuevo.'); return; }
+    setPrayers(prev => prev.map(p => p.id === item.id ? { ...p, count: data } : p));
   };
 
   const togglePrayerStatus = async (item) => {
@@ -388,8 +353,7 @@ export default function App() {
   };
 
   const handleDeletePrayer = async (id) => {
-    if (['tesorero', 'secretario'].includes(currentRole)) return;
-    if ((currentRole === 'general' || currentRole === 'lideres') && !myLocalPrayerIds.includes(String(id))) return;
+    if (currentRole !== 'pastor') return;
     setPrayers(prev => prev.filter(p => p.id !== String(id)));
     await supabase.from('prayers').delete().eq('id', String(id));
   };
@@ -502,9 +466,7 @@ export default function App() {
 
   const calendarMatrix = getCalendarMatrix(currentMonth);
 
-  const userDisplayName = generalFirstName && generalLastName 
-    ? `${generalFirstName} ${generalLastName}` 
-    : 'Invitado';
+  const userDisplayName = currentProfile?.display_name || currentUser?.email || (generalFirstName && generalLastName ? `${generalFirstName} ${generalLastName}` : 'Invitado');
 
   if (!currentRole) {
     return (
@@ -524,7 +486,7 @@ export default function App() {
 
           <TouchableOpacity 
             style={styles.welcomeAdminBtn} 
-            onPress={() => { setTargetRoleToLogin(null); setPasswordInput(''); setShowAdminSelectionModal(true); }}
+            onPress={() => { setAuthEmail(''); setAuthPassword(''); setAuthError(''); setShowAdminSelectionModal(true); }}
           >
             <Text style={styles.welcomeAdminBtnText}>🔐 Accesos Administrativos</Text>
             <Text style={styles.welcomeAdminBtnSub}>Pastor, Secretario(a), Tesorero(a) y Líderes</Text>
@@ -576,67 +538,30 @@ export default function App() {
         <Modal visible={showAdminSelectionModal} transparent animationType="fade">
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              
-              {targetRoleToLogin === null ? (
-                <>
-                  <Text style={styles.modalTitle}>🔐 Selecciona tu Cargo</Text>
-                  <Text style={styles.modalSub}>Elige tu perfil administrativo para continuar:</Text>
-                  
-                  <View style={{ gap: 10, marginVertical: 10 }}>
-                    {adminRoles.filter(role => role.isVisible).map(role => (
-                      <TouchableOpacity 
-                        key={role.id}
-                        style={styles.adminRoleBtnInside} 
-                        onPress={() => { setTargetRoleToLogin(role.id); setPasswordInput(''); }}
-                      >
-                        <Text style={styles.adminRoleTextInside}>{role.icon} {role.name}</Text>
-                        <Text style={{ color: '#2dd4bf', fontSize: 12 }}>Seleccionar ➔</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-
-                  <TouchableOpacity 
-                    style={[styles.actionBtn, { backgroundColor: '#344256', marginTop: 10 }]} 
-                    onPress={() => setShowAdminSelectionModal(false)}
-                  >
-                    <Text style={{ color: '#fff', fontWeight: 'bold' }}>Cancelar</Text>
-                  </TouchableOpacity>
-                </>
-              ) : (
-                <>
-                  <Text style={styles.modalTitle}>
-                    🔐 Clave de Acceso: {adminRoles.find(r => r.id === targetRoleToLogin)?.name?.toUpperCase()}
-                  </Text>
-                  <Text style={styles.modalSub}>Introduce la contraseña asignada:</Text>
-                  
-                  <TextInput 
-                    style={styles.input} 
-                    placeholder="Contraseña" 
-                    placeholderTextColor="#666" 
-                    secureTextEntry 
-                    value={passwordInput} 
-                    onChangeText={setPasswordInput} 
-                    autoFocus
-                  />
-
-                  <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
-                    <TouchableOpacity 
-                      style={[styles.actionBtn, { backgroundColor: '#344256', flex: 1 }]} 
-                      onPress={() => setTargetRoleToLogin(null)}
-                    >
-                      <Text style={{ color: '#fff', fontWeight: 'bold' }}>⇦ Volver</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity 
-                      style={[styles.actionBtn, { flex: 1 }]} 
-                      onPress={handleAdminLogin}
-                    >
-                      <Text style={styles.actionBtnText}>Ingresar</Text>
-                    </TouchableOpacity>
-                  </View>
-                </>
-              )}
-
+              <Text style={styles.modalTitle}>Acceso administrativo</Text>
+              <Text style={styles.modalSub}>Ingresa con tu cuenta personal autorizada.</Text>
+              <TextInput style={styles.input} placeholder="Correo electrónico" placeholderTextColor="#8492a6" value={authEmail}
+                onChangeText={(value) => { setAuthEmail(value); setAuthError(''); }} keyboardType="email-address" autoCapitalize="none"
+                autoComplete="email" textContentType="emailAddress" autoFocus />
+              <TextInput style={styles.input} placeholder="Contraseña" placeholderTextColor="#8492a6" value={authPassword}
+                onChangeText={(value) => { setAuthPassword(value); setAuthError(''); }} secureTextEntry autoCapitalize="none"
+                autoComplete="password" textContentType="password" onSubmitEditing={handleAdminLogin} />
+              {!!authError && <Text style={styles.authErrorText}>{authError}</Text>}
+              <TouchableOpacity style={[styles.actionBtn, authLoading && { opacity: 0.6 }]} onPress={handleAdminLogin} disabled={authLoading}>
+                <Text style={styles.actionBtnText}>{authLoading ? 'Verificando acceso…' : 'Ingresar de forma segura'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.forgotPasswordBtn} onPress={async () => {
+                if (!authEmail.trim()) { setAuthError('Escribe tu correo para enviarte el enlace de recuperación.'); return; }
+                setAuthLoading(true);
+                const { error } = await supabase.auth.resetPasswordForEmail(authEmail.trim().toLowerCase(), { redirectTo: 'https://ipuc-lideres.vercel.app' });
+                setAuthLoading(false); setAuthError(error ? error.message : 'Si la cuenta existe, recibirás un enlace de recuperación.');
+              }} disabled={authLoading}>
+                <Text style={styles.forgotPasswordText}>¿Olvidaste tu contraseña?</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#26364b', marginTop: 8 }]}
+                onPress={() => { setShowAdminSelectionModal(false); setAuthError(''); setAuthPassword(''); }}>
+                <Text style={{ color: '#fff', fontWeight: '700' }}>Cerrar</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </Modal>
@@ -644,14 +569,15 @@ export default function App() {
     );
   }
 
-  const currentRoleObj = adminRoles.find(r => r.id === currentRole);
+  const roleLabels = { pastor: 'Pastor', secretario: 'Secretaría', tesorero: 'Tesorería', lideres: 'Líderes', general: 'Congregación' };
+  const currentRoleObj = currentRole ? { name: roleLabels[currentRole] || currentRole } : null;
 
   return (
     <SafeAreaView style={styles.container}>
       {!isProjectorMode && (
         <View style={styles.topBarContainer}>
           <View style={styles.roleSelectorWrapper}>
-            <TouchableOpacity style={styles.roleButtonActive} onPress={() => setCurrentRole(null)}>
+            <TouchableOpacity style={styles.roleButtonActive} onPress={handleSignOut}>
               <Text style={styles.roleButtonText}>
                 👤 {currentRoleObj ? currentRoleObj.name : userDisplayName} (Salir ⇦)
               </Text>
@@ -831,7 +757,7 @@ export default function App() {
               </View>
 
               {prayers.map(p => {
-                const isMyPrayer = (currentRole === 'general' || currentRole === 'lideres') && myLocalPrayerIds.includes(String(p.id));
+                const isMyPrayer = false;
                 const isEditingThis = editingPrayerId === p.id;
 
                 return (
@@ -1174,117 +1100,7 @@ export default function App() {
             </ScrollView>
           )}
 
-          {activeTab === 'users' && currentRole === 'pastor' && (
-            <ScrollView style={styles.content}>
-              <Text style={styles.sectionTitle}>🔐 Gestión de Accesos y Visibilidad</Text>
-              <Text style={styles.cardSub}>Activa el interruptor para hacer visible un perfil en el menú administrativo:</Text>
 
-              {adminRoles.map((role) => {
-                const isEditing = editingRoleId === role.id;
-
-                return (
-                  <View key={role.id} style={styles.card}>
-                    <View style={styles.cardHeaderRow}>
-                      <Text style={styles.cardTitle}>{role.icon} {role.name}</Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                        {!isEditing && (
-                          <TouchableOpacity onPress={() => {
-                            setEditingRoleId(role.id);
-                            setTempRoleName(role.name);
-                            setTempRoleKey(role.key);
-                          }}>
-                            <Text style={{ color: '#2dd4bf', fontWeight: 'bold', fontSize: 12 }}>✏️ Modificar</Text>
-                          </TouchableOpacity>
-                        )}
-                        {role.id !== 'pastor' && (
-                          <TouchableOpacity onPress={() => handleDeleteAdminRole(role.id)}>
-                            <Text style={{ color: '#ff0055', fontWeight: 'bold', fontSize: 12 }}>✕</Text>
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                    </View>
-
-                    <View style={styles.switchRowInside}>
-                      <Text style={{ color: '#d1d5db', fontSize: 12 }}>Visible en menú administrativo:</Text>
-                      <Switch
-                        trackColor={{ false: '#344256', true: '#2dd4bf' }}
-                        thumbColor={role.isVisible ? '#0f172a' : '#9ca3af'}
-                        onValueChange={() => handleToggleRoleVisibility(role.id)}
-                        value={role.isVisible}
-                      />
-                    </View>
-
-                    {isEditing ? (
-                      <View style={{ marginTop: 8 }}>
-                        <TextInput 
-                          style={styles.input} 
-                          value={tempRoleName} 
-                          onChangeText={setTempRoleName} 
-                          placeholder="Nombre del perfil"
-                        />
-                        <TextInput 
-                          style={styles.input} 
-                          value={tempRoleKey} 
-                          onChangeText={setTempRoleKey} 
-                          placeholder="Clave de acceso"
-                        />
-                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
-                          <TouchableOpacity 
-                            style={[styles.actionBtn, { backgroundColor: '#344256', flex: 1, padding: 8 }]} 
-                            onPress={() => setEditingRoleId(null)}
-                          >
-                            <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>Cancelar</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity 
-                            style={[styles.actionBtn, { flex: 1, padding: 8 }]} 
-                            onPress={() => handleSaveSingleRole(role.id)}
-                          >
-                            <Text style={{ color: '#0f172a', fontSize: 12, fontWeight: 'bold' }}>💾 Guardar</Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    ) : (
-                      <Text style={[styles.cardSub, { color: '#9ca3af', fontSize: 12 }]}>Clave: ••••</Text>
-                    )}
-                  </View>
-                );
-              })}
-
-              <TouchableOpacity 
-                style={styles.addSedeToggleBtn} 
-                onPress={() => setShowCreateNewRoleForm(!showCreateNewRoleForm)}
-              >
-                <Text style={styles.addSedeToggleText}>
-                  {showCreateNewRoleForm ? '❌ Cancelar' : '➕ Crear Nuevo Perfil de Líderes'}
-                </Text>
-              </TouchableOpacity>
-
-              {showCreateNewRoleForm && (
-                <View style={styles.addSedeCard}>
-                  <Text style={{ color: '#2dd4bf', fontWeight: 'bold', marginBottom: 8 }}>Nuevo Perfil (Oculto por defecto)</Text>
-                  
-                  <TextInput 
-                    style={styles.input} 
-                    placeholder="Nombre (Ej. Líderes de Jóvenes)" 
-                    placeholderTextColor="#666" 
-                    value={newRoleName} 
-                    onChangeText={setNewRoleName} 
-                  />
-                  <TextInput 
-                    style={styles.input} 
-                    placeholder="Clave de acceso" 
-                    placeholderTextColor="#666" 
-                    value={newRoleKey} 
-                    onChangeText={setNewRoleKey} 
-                  />
-
-                  <TouchableOpacity style={styles.actionBtn} onPress={handleAddNewRole}>
-                    <Text style={styles.actionBtnText}>Crear Perfil</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </ScrollView>
-          )}
 
         </View>
       </View>
@@ -1296,10 +1112,10 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0f172a' },
   
   welcomeContainer: { flex: 1, backgroundColor: '#0f172a', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  welcomeCard: { backgroundColor: '#172033', width: '100%', maxWidth: 440, padding: 28, borderRadius: 20, borderWidth: 2, borderColor: '#2dd4bf', alignItems: 'center', shadowColor: '#2dd4bf', shadowOpacity: 0.25, shadowRadius: 15 },
-  welcomeEmoji: { fontSize: 44, marginBottom: 10 },
-  welcomeTitle: { fontSize: 24, fontWeight: 'bold', color: '#ffffff', marginBottom: 6, textAlign: 'center' },
-  welcomeSubtitle: { fontSize: 13, color: '#9ca3af', textAlign: 'center', marginBottom: 24 },
+  welcomeCard: { backgroundColor: '#142235', width: '100%', maxWidth: 460, padding: 30, borderRadius: 24, borderWidth: 1, borderColor: '#31506a', alignItems: 'center', shadowColor: '#000000', shadowOpacity: 0.28, shadowRadius: 24, shadowOffset: { width: 0, height: 12 }, elevation: 10 },
+  welcomeEmoji: { fontSize: 46, marginBottom: 14 },
+  welcomeTitle: { fontSize: 28, fontWeight: '800', letterSpacing: 0.3, color: '#ffffff', marginBottom: 8, textAlign: 'center' },
+  welcomeSubtitle: { fontSize: 13, lineHeight: 20, color: '#aab8c8', textAlign: 'center', marginBottom: 26, maxWidth: 320 },
   
   welcomePublicBtn: { backgroundColor: '#2dd4bf', width: '100%', padding: 16, borderRadius: 14, alignItems: 'center', marginBottom: 14 },
   welcomePublicBtnText: { color: '#0f172a', fontSize: 15, fontWeight: 'bold' },
@@ -1313,9 +1129,12 @@ const styles = StyleSheet.create({
   adminRoleTextInside: { color: '#ffffff', fontSize: 14, fontWeight: 'bold' },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  modalContent: { backgroundColor: '#172033', width: '100%', maxWidth: 360, padding: 22, borderRadius: 16, borderWidth: 2, borderColor: '#2dd4bf' },
+  modalContent: { backgroundColor: '#142235', width: '100%', maxWidth: 390, padding: 24, borderRadius: 20, borderWidth: 1, borderColor: '#31506a' },
   modalTitle: { fontSize: 16, fontWeight: 'bold', color: '#ffffff', marginBottom: 6 },
-  modalSub: { fontSize: 12, color: '#9ca3af', marginBottom: 14 },
+  modalSub: { fontSize: 12, lineHeight: 18, color: '#aab8c8', marginBottom: 16 },
+  authErrorText: { color: '#fca5a5', fontSize: 12, lineHeight: 18, marginBottom: 10 },
+  forgotPasswordBtn: { alignItems: 'center', paddingVertical: 12 },
+  forgotPasswordText: { color: '#65d6c8', fontSize: 12, fontWeight: '700' },
 
   topBarContainer: { flexDirection: 'row', backgroundColor: '#172033', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, height: 56, borderBottomWidth: 1, borderColor: '#202d40', zIndex: 10 },
   roleSelectorWrapper: { marginRight: 6 },
