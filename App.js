@@ -1056,24 +1056,11 @@ export default function App() {
   return (
     <SafeAreaView style={styles.container}>
       {!isProjectorMode && (
-        <View style={styles.topBarContainer}>
-          <View style={styles.roleSelectorWrapper}>
-            <TouchableOpacity style={styles.roleButtonActive} onPress={handleSignOut}>
-              <Text style={styles.roleButtonText}>
-                👤 {currentRoleObj ? currentRoleObj.name : userDisplayName} (Salir ⇦)
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {activeTab !== 'home' && (
-            <TouchableOpacity style={styles.homeNavBtn} onPress={() => setActiveTab('home')}>
-              <Text style={styles.homeNavBtnText}>🏠 Inicio</Text>
-            </TouchableOpacity>
-          )}
-
-          <TouchableOpacity style={styles.refreshBtn} onPress={fetchData} disabled={refreshing}>
-            <Text style={styles.refreshBtnText}>{refreshing ? '⏳' : '🔄'}</Text>
-          </TouchableOpacity>
+        <View style={styles.appContextBar}>
+          <Text style={styles.appContextText}>
+            {currentRoleObj ? currentRoleObj.name : userDisplayName || 'Congregación'}
+          </Text>
+          <Text style={styles.appContextHint}>IPUC Líderes</Text>
         </View>
       )}
 
@@ -1788,6 +1775,37 @@ export default function App() {
 
         </View>
       </View>
+      {!isProjectorMode && (
+        <View style={styles.bottomNavOuter}>
+          <View style={[styles.bottomNav, isDesktop && styles.bottomNavDesktop]}>
+            <TouchableOpacity
+              style={[styles.bottomNavItem, activeTab === 'home' && styles.bottomNavItemActive]}
+              onPress={() => setActiveTab('home')}
+              accessibilityLabel="Ir al inicio"
+            >
+              <Text style={[styles.bottomNavIcon, activeTab === 'home' && styles.bottomNavTextActive]}>⌂</Text>
+              <Text style={[styles.bottomNavLabel, activeTab === 'home' && styles.bottomNavTextActive]}>Inicio</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.bottomNavItem}
+              onPress={fetchData}
+              disabled={refreshing}
+              accessibilityLabel="Actualizar contenido"
+            >
+              <Text style={styles.bottomNavIcon}>{refreshing ? '◌' : '↻'}</Text>
+              <Text style={styles.bottomNavLabel}>{refreshing ? 'Actualizando' : 'Actualizar'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.bottomNavItem}
+              onPress={handleSignOut}
+              accessibilityLabel="Salir de la cuenta"
+            >
+              <Text style={[styles.bottomNavIcon, styles.bottomNavExitIcon]}>⇥</Text>
+              <Text style={[styles.bottomNavLabel, styles.bottomNavExitLabel]}>Salir</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -1820,16 +1838,20 @@ const styles = StyleSheet.create({
   forgotPasswordBtn: { alignItems: 'center', paddingVertical: 12 },
   forgotPasswordText: { color: '#65d6c8', fontSize: 12, fontWeight: '700' },
 
-  topBarContainer: { flexDirection: 'row', backgroundColor: '#172033', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, height: 56, borderBottomWidth: 1, borderColor: '#202d40', zIndex: 10 },
-  roleSelectorWrapper: { marginRight: 6 },
-  roleButtonActive: { backgroundColor: '#202d40', paddingHorizontal: 8, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#2dd4bf' },
-  roleButtonText: { color: '#2dd4bf', fontSize: 11, fontWeight: 'bold' },
-  
-  homeNavBtn: { backgroundColor: '#202d40', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#344256', marginRight: 6 },
-  homeNavBtnText: { color: '#2dd4bf', fontSize: 12, fontWeight: 'bold' },
+  appContextBar: { minHeight: 42, paddingHorizontal: 18, paddingVertical: 9, backgroundColor: '#111c30', borderBottomWidth: 1, borderBottomColor: '#26364d', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  appContextText: { color: '#dbeafe', fontSize: 12, fontWeight: '700', letterSpacing: 0.3 },
+  appContextHint: { color: '#718096', fontSize: 11, fontWeight: '600' },
 
-  refreshBtn: { backgroundColor: '#202d40', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#344256' },
-  refreshBtnText: { color: '#2dd4bf', fontSize: 13, fontWeight: 'bold' },
+  bottomNavOuter: { backgroundColor: '#111c30', borderTopWidth: 1, borderTopColor: '#2a3b52', paddingTop: 7, paddingBottom: 5, paddingHorizontal: 12 },
+  bottomNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', width: '100%', maxWidth: 520, alignSelf: 'center' },
+  bottomNavDesktop: { maxWidth: 620 },
+  bottomNavItem: { flex: 1, minHeight: 52, alignItems: 'center', justifyContent: 'center', borderRadius: 12, marginHorizontal: 5, paddingVertical: 5 },
+  bottomNavItemActive: { backgroundColor: '#1d354b', borderWidth: 1, borderColor: '#2dd4bf' },
+  bottomNavIcon: { color: '#aab8c8', fontSize: 21, lineHeight: 23, fontWeight: '700' },
+  bottomNavLabel: { color: '#aab8c8', fontSize: 11, fontWeight: '600', marginTop: 2 },
+  bottomNavTextActive: { color: '#2dd4bf' },
+  bottomNavExitIcon: { color: '#f59e9e' },
+  bottomNavExitLabel: { color: '#fca5a5' },
 
   mainWrapper: { flex: 1 },
   desktopWrapper: { maxWidth: 1024, alignSelf: 'center', width: '100%' },
