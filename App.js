@@ -268,6 +268,11 @@ export default function App() {
           if (refreshedProfile) resolvedProfile = refreshedProfile;
         }
       }
+      if (!['pastor', 'secretario', 'tesorero', 'lideres'].includes(resolvedProfile.role)) {
+        await supabase.auth.signOut();
+        if (mounted) { setCurrentUser(null); setCurrentProfile(null); setCurrentRole(null); }
+        return;
+      }
       setCurrentProfile(resolvedProfile); setCurrentRole(resolvedProfile.role);
     };
     supabase.auth.getSession().then(({ data }) => syncSession(data.session)).catch(() => {});
