@@ -11,7 +11,8 @@ import {
   Dimensions,
   Switch,
   Modal,
-  Linking
+  Linking,
+  Share
 } from 'react-native';
 import { createClient } from '@supabase/supabase-js';
 
@@ -400,6 +401,35 @@ export default function App() {
   useEffect(() => {
     if (activeTab === 'amanecer') loadCommunityLink();
   }, [activeTab]);
+
+  const copyCommunityLink = async () => {
+    const url = (communityLink?.url || '').trim();
+    if (!url) {
+      setCommunityLinkMessage('No hay un enlace configurado para copiar.');
+      return;
+    }
+    try {
+      if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+      } else if (Platform.OS === 'web' && typeof document !== 'undefined') {
+        const field = document.createElement('textarea');
+        field.value = url;
+        field.setAttribute('readonly', '');
+        field.style.position = 'fixed';
+        field.style.opacity = '0';
+        document.body.appendChild(field);
+        field.select();
+        const copied = document.execCommand('copy');
+        document.body.removeChild(field);
+        if (!copied) throw new Error('El navegador no permitió copiar el enlace.');
+      } else {
+        await Share.share({ message: url, url });
+      }
+      setCommunityLinkMessage('Enlace copiado. Ya puedes pegarlo en tu WhatsApp personal.');
+    } catch (error) {
+      setCommunityLinkMessage('No fue posible copiar automáticamente. Mantén presionado el enlace para copiarlo.');
+    }
+  };
 
   const saveCommunityLink = async () => {
     if (currentRole !== 'pastor' || !currentUser || !communityLinkDraft) return;
@@ -1497,10 +1527,14 @@ export default function App() {
                   <TouchableOpacity style={[styles.actionBtn, { marginTop: 16 }]} onPress={() => Linking.openURL(communityLink.url).catch(() => setCommunityLinkMessage('No se pudo abrir el enlace. Abre la URL directamente en tu navegador.'))}>
                     <Text style={styles.actionBtnText}>🔗 Conectarme a Amanecer con Fe</Text>
                   </TouchableOpacity>
+                  <TouchableOpacity style={[styles.actionBtn, { marginTop: 10, backgroundColor: '#26364d', borderWidth: 1, borderColor: '#fbbf24' }]} onPress={copyCommunityLink}>
+                    <Text style={{ color: '#fbbf24', fontWeight: 'bold', fontSize: 14 }}>📋 Copiar enlace para compartir</Text>
+                  </TouchableOpacity>
                 ) : (
                   <Text style={{ color: '#fbbf24', marginTop: 12, fontSize: 13 }}>El enlace de la reunión no está disponible en este momento.</Text>
                 )}
-                <Text style={[styles.cardSub, { marginTop: 12 }]}>Enlace actual: {communityLink.url || 'Sin configurar'}</Text>
+                <Text style={[styles.cardSub, { marginTop: 12, userSelect: 'text' }]}>Enlace actual: {communityLink.url || 'Sin configurar'}</Text>
+                {!!communityLinkMessage && <Text style={[styles.cardSub, { color: '#fbbf24', marginTop: 8 }]}>{communityLinkMessage}</Text>}
               </View>
               {currentRole === 'pastor' && (
                 <View style={styles.card}>
