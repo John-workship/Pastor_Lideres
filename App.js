@@ -10,7 +10,8 @@ import {
   Platform,
   Dimensions,
   Switch,
-  Modal
+  Modal,
+  Linking
 } from 'react-native';
 import { createClient } from '@supabase/supabase-js';
 
@@ -47,6 +48,27 @@ export default function App() {
   const [activeGeneralUsers, setActiveGeneralUsers] = useState([]);
 
   const [activeTab, setActiveTab] = useState('home');
+  const [inviteToken] = useState(() => Platform.OS === 'web' && typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('invite') || '' : '');
+  const [inviteFullName, setInviteFullName] = useState('');
+  const [invitePassword, setInvitePassword] = useState('');
+  const [invitePasswordConfirm, setInvitePasswordConfirm] = useState('');
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteError, setInviteError] = useState('');
+  const [inviteInfo, setInviteInfo] = useState('');
+  const [inviteTokenConsumed, setInviteTokenConsumed] = useState(false);
+  const [leadersList, setLeadersList] = useState([]);
+  const [leaderInvitations, setLeaderInvitations] = useState([]);
+  const [leaderCampaigns, setLeaderCampaigns] = useState([]);
+  const [activeCampaignId, setActiveCampaignId] = useState(null);
+  const [newCampaignTitle, setNewCampaignTitle] = useState('Convocatoria de líderes 2026');
+  const [newLeaderName, setNewLeaderName] = useState('');
+  const [newLeaderEmail, setNewLeaderEmail] = useState('');
+  const [newLeaderPhone, setNewLeaderPhone] = useState('');
+  const [newLeaderCommittee, setNewLeaderCommittee] = useState('');
+  const [selectedLeaderIds, setSelectedLeaderIds] = useState([]);
+  const [generatedInviteLinks, setGeneratedInviteLinks] = useState([]);
+  const [leadersLoading, setLeadersLoading] = useState(false);
+  const [leadersMessage, setLeadersMessage] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [isProjectorMode, setIsProjectorMode] = useState(false);
   
@@ -79,6 +101,7 @@ export default function App() {
       return [
         { key: 'live', title: 'Transmisión en Vivo', subtitle: 'Monitorea la señal del culto', icon: '📺', color: '#2dd4bf' },
         { key: 'comites', title: 'Comités de Trabajo', subtitle: 'Gestiona líderes y secretarios de comités', icon: '👥', color: '#34d399' },
+        { key: 'leaders', title: 'Gestión de líderes', subtitle: 'Directorio e invitaciones para 2026', icon: '📨', color: '#60a5fa' },
         { key: 'services', title: 'Calendario de Cultos', subtitle: 'Programa y organiza los eventos y cultos', icon: '📋', color: '#fbbf24' },
         { key: 'finance', title: 'Tesorería (Visualización)', subtitle: 'Consulta los fondos y reportes financieros', icon: '💰', color: '#a78bfa' }
       ];
@@ -97,6 +120,7 @@ export default function App() {
       { key: 'comites', title: 'Comités de Trabajo', subtitle: 'Organiza líderes, comités y secretarios', icon: '👥', color: '#fbbf24' },
       { key: 'finance', title: 'Tesorería y Fondos', subtitle: 'Administra fondos, ofrendas y cuentas', icon: '💰', color: '#a78bfa' },
       { key: 'services', title: 'Calendario de Cultos', subtitle: 'Planifica la agenda de servicios y eventos', icon: '📋', color: '#f472b6' },
+      { key: 'leaders', title: 'Gestión de líderes', subtitle: 'Directorio e invitaciones para 2026', icon: '📨', color: '#60a5fa' },
       { key: 'users', title: 'Gestión de Accesos', subtitle: 'Modifica perfiles, visibilidad y claves', icon: '🔐', color: '#60a5fa' }
     ];
   };
@@ -233,7 +257,18 @@ export default function App() {
       const { data, error } = await supabase.from('profiles').select('role, display_name, must_change_password').eq('id', user.id).single();
       if (!mounted) return;
       if (error || !data) { setCurrentProfile(null); setCurrentRole(null); return; }
-      setCurrentProfile(data); setCurrentRole(data.role);
+      let resolvedProfile = data;
+      if (data.role === 'pending' && inviteToken && user.email) {
+        const { error: redeemError } = await supabase.rpc('redeem_leader_invitation', {
+          p_token: inviteToken, p_user_id: user.id, p_email: user.email,
+          p_full_name: user.user_metadata?.display_name || user.email.split('@')[0]
+        });
+        if (!redeemError) {
+          const { data: refreshedProfile } = await supabase.from('profiles').select('role, display_name, must_change_password').eq('id', user.id).single();
+          if (refreshedProfile) resolvedProfile = refreshedProfile;
+        }
+      }
+      setCurrentProfile(resolvedProfile); setCurrentRole(resolvedProfile.role);
     };
     supabase.auth.getSession().then(({ data }) => syncSession(data.session)).catch(() => {});
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => Promise.resolve().then(() => syncSession(session)));
@@ -248,10 +283,155 @@ export default function App() {
       if (error) throw error;
       const { data: profileData, error: profileError } = await supabase.from('profiles').select('role, display_name, must_change_password').eq('id', data.user.id).single();
       if (profileError || !profileData) { await supabase.auth.signOut(); throw new Error('Esta cuenta aún no tiene un perfil administrativo habilitado. Contacta al administrador.'); }
-      if (!['pastor', 'secretario', 'tesorero', 'lideres'].includes(profileData.role)) { await supabase.auth.signOut(); throw new Error('Esta cuenta no tiene permisos administrativos asignados.'); }
-      setCurrentUser(data.user); setCurrentProfile(profileData); setCurrentRole(profileData.role); setActiveTab('home'); setAuthPassword(''); setShowAdminSelectionModal(false);
+      let resolvedProfile = profileData;
+      if (profileData.role === 'pending' && inviteToken) {
+        const { error: redeemError } = await supabase.rpc('redeem_leader_invitation', {
+          p_token: inviteToken, p_user_id: data.user.id, p_email: data.user.email,
+          p_full_name: data.user.user_metadata?.display_name || data.user.email.split('@')[0]
+        });
+        if (!redeemError) {
+          const { data: refreshedProfile } = await supabase.from('profiles').select('role, display_name, must_change_password').eq('id', data.user.id).single();
+          if (refreshedProfile) resolvedProfile = refreshedProfile;
+        }
+      }
+      if (!['pastor', 'secretario', 'tesorero', 'lideres'].includes(resolvedProfile.role)) { await supabase.auth.signOut(); throw new Error('Esta cuenta no tiene permisos administrativos asignados.'); }
+      setCurrentUser(data.user); setCurrentProfile(resolvedProfile); setCurrentRole(resolvedProfile.role); setActiveTab('home'); setAuthPassword(''); setShowAdminSelectionModal(false);
     } catch (error) { setAuthError(error?.message || 'No fue posible iniciar sesión.'); }
     finally { setAuthLoading(false); }
+  };
+
+
+  const loadLeaderManagement = async () => {
+    if (!['pastor', 'secretario'].includes(currentRole)) return;
+    setLeadersLoading(true);
+    setLeadersMessage('');
+    try {
+      const [people, campaigns, invitations] = await Promise.all([
+        supabase.from('leader_directory').select('*').eq('period_year', 2026).order('full_name'),
+        supabase.from('leader_campaigns').select('*').eq('period_year', 2026).order('created_at', { ascending: false }),
+        supabase.from('leader_invitations').select('id,email,status,expires_at,created_at,accepted_at,leader_directory(full_name,phone,committee)').order('created_at', { ascending: false }).limit(100)
+      ]);
+      if (people.error) throw people.error;
+      if (campaigns.error) throw campaigns.error;
+      if (invitations.error) throw invitations.error;
+      setLeadersList(people.data || []);
+      setLeaderCampaigns(campaigns.data || []);
+      setLeaderInvitations(invitations.data || []);
+      setActiveCampaignId(prev => prev || campaigns.data?.[0]?.id || null);
+    } catch (error) {
+      setLeadersMessage('No fue posible cargar el directorio: ' + (error.message || 'Error de conexión'));
+    } finally {
+      setLeadersLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'leaders') loadLeaderManagement();
+  }, [activeTab, currentRole]);
+
+  const handleCreateLeaderCampaign = async () => {
+    if (!['pastor', 'secretario'].includes(currentRole) || !newCampaignTitle.trim()) return;
+    setLeadersLoading(true);
+    const { data, error } = await supabase.from('leader_campaigns').insert({
+      title: newCampaignTitle.trim(), period_year: 2026, created_by: currentUser.id
+    }).select().single();
+    setLeadersLoading(false);
+    if (error) { setLeadersMessage('No se pudo crear la convocatoria: ' + error.message); return; }
+    setLeaderCampaigns(prev => [data, ...prev]);
+    setActiveCampaignId(data.id);
+    setLeadersMessage('Convocatoria creada correctamente.');
+  };
+
+  const handleSaveLeaderDirectory = async () => {
+    if (!['pastor', 'secretario'].includes(currentRole)) return;
+    if (!newLeaderName.trim() || !newLeaderEmail.trim()) {
+      setLeadersMessage('El nombre y el correo son obligatorios.');
+      return;
+    }
+    const { data, error } = await supabase.from('leader_directory').insert({
+      full_name: newLeaderName.trim(), email: newLeaderEmail.trim().toLowerCase(),
+      phone: newLeaderPhone.trim() || null, committee: newLeaderCommittee.trim() || null,
+      period_year: 2026, created_by: currentUser.id
+    }).select().single();
+    if (error) { setLeadersMessage('No se pudo registrar: ' + error.message); return; }
+    setLeadersList(prev => [...prev, data].sort((a,b) => a.full_name.localeCompare(b.full_name)));
+    setNewLeaderName(''); setNewLeaderEmail(''); setNewLeaderPhone(''); setNewLeaderCommittee('');
+    setLeadersMessage('Líder registrado en el directorio 2026.');
+  };
+
+  const toggleLeaderSelection = (id) => {
+    setSelectedLeaderIds(prev => prev.includes(id) ? prev.filter(value => value !== id) : [...prev, id]);
+  };
+
+  const handleGenerateLeaderInvitations = async () => {
+    if (!['pastor', 'secretario'].includes(currentRole) || selectedLeaderIds.length === 0) return;
+    setLeadersLoading(true);
+    setLeadersMessage('');
+    const createdLinks = [];
+    for (const personId of selectedLeaderIds) {
+      const person = leadersList.find(item => item.id === personId);
+      if (!person) continue;
+      const { data, error } = await supabase.rpc('create_leader_invitation', {
+        p_person_id: personId, p_campaign_id: activeCampaignId || null
+      });
+      if (error || !data?.[0]?.invitation_token) {
+        setLeadersMessage('No se pudo generar la invitación de ' + person.full_name + ': ' + (error?.message || 'Respuesta inválida'));
+        continue;
+      }
+      const token = data[0].invitation_token;
+      const inviteUrl = 'https://ipuc-lideres.vercel.app/?invite=' + encodeURIComponent(token) + '&email=' + encodeURIComponent(person.email);
+      const message = 'Hola ' + person.full_name + '. Te invitamos a activar tu acceso como líder de IPUC Mosquera 3 para el periodo 2026. Abre este enlace personal y define tu contraseña: ' + inviteUrl + ' (Válido por 7 días; no lo compartas).';
+      const phone = (person.phone || '').replace(/[^0-9]/g, '');
+      const whatsappUrl = 'https://wa.me/' + phone + '?text=' + encodeURIComponent(message);
+      createdLinks.push({ personId, fullName: person.full_name, inviteUrl, whatsappUrl, expiresAt: data[0].expires_at });
+    }
+    setGeneratedInviteLinks(prev => [...createdLinks, ...prev.filter(old => !createdLinks.some(next => next.personId === old.personId))]);
+    setSelectedLeaderIds([]);
+    setLeadersLoading(false);
+    await loadLeaderManagement();
+    if (createdLinks.length) setLeadersMessage('Enlaces individuales generados. La invitación solo queda enviada cuando completes el envío desde WhatsApp.');
+  };
+
+  const openLeaderWhatsApp = async (url) => {
+    try { await Linking.openURL(url); }
+    catch (error) { setLeadersMessage('No fue posible abrir WhatsApp en este dispositivo.'); }
+  };
+
+  const handleAcceptLeaderInvitation = async () => {
+    setInviteError(''); setInviteInfo('');
+    if (!inviteToken) { setInviteError('El enlace no contiene un código de invitación.'); return; }
+    if (inviteFullName.trim().length < 2) { setInviteError('Escribe tu nombre completo.'); return; }
+    if (invitePassword.length < 12) { setInviteError('La contraseña debe tener al menos 12 caracteres.'); return; }
+    if (invitePassword !== invitePasswordConfirm) { setInviteError('Las contraseñas no coinciden.'); return; }
+    setInviteLoading(true);
+    try {
+      const email = new URLSearchParams(window.location.search).get('email') || '';
+      if (!email) throw new Error('El enlace no incluye el correo asociado. Solicita al secretario un nuevo enlace.');
+      const { data, error } = await supabase.auth.signUp({
+        email: email.toLowerCase(), password: invitePassword,
+        options: {
+          data: { display_name: inviteFullName.trim() },
+          emailRedirectTo: 'https://ipuc-lideres.vercel.app/?invite=' + encodeURIComponent(inviteToken) + '&email=' + encodeURIComponent(email)
+        }
+      });
+      if (error) throw error;
+      if (data.session && data.user) {
+        const { error: redeemError } = await supabase.rpc('redeem_leader_invitation', {
+          p_token: inviteToken, p_user_id: data.user.id, p_email: data.user.email,
+          p_full_name: inviteFullName.trim()
+        });
+        if (redeemError) throw redeemError;
+        const { data: profile } = await supabase.from('profiles').select('role,display_name,must_change_password').eq('id', data.user.id).single();
+        setCurrentUser(data.user); setCurrentProfile(profile); setCurrentRole(profile?.role || 'lideres');
+        setInviteTokenConsumed(true);
+      } else {
+        setInviteInfo('Cuenta creada. Revisa el correo de verificación de Supabase. Después de confirmarlo, vuelve a abrir este enlace e ingresa con tu correo y contraseña.');
+      }
+    } catch (error) {
+      setInviteError(error.message || 'No fue posible activar la invitación.');
+    } finally {
+      setInviteLoading(false);
+    }
   };
 
   const handleFirstPasswordChange = async () => {
@@ -510,6 +690,43 @@ export default function App() {
   const calendarMatrix = getCalendarMatrix(currentMonth);
 
   const userDisplayName = currentProfile?.display_name || currentUser?.email || (generalFirstName && generalLastName ? `${generalFirstName} ${generalLastName}` : 'Invitado');
+
+
+  if (!currentRole && inviteToken && !inviteTokenConsumed) {
+    return (
+      <SafeAreaView style={styles.welcomeContainer}>
+        <View style={styles.welcomeCard}>
+          <Text style={styles.welcomeEmoji}>📨</Text>
+          <Text style={styles.welcomeTitle}>Activa tu acceso de líder</Text>
+          <Text style={styles.welcomeSubtitle}>Invitación personal para el periodo 2026 de IPUC Mosquera 3. Define tu contraseña para activar tu cuenta.</Text>
+          <TextInput style={styles.input} placeholder="Nombre completo" placeholderTextColor="#8492a6" value={inviteFullName} onChangeText={setInviteFullName} autoCapitalize="words" />
+          <TextInput style={styles.input} placeholder="Contraseña (mínimo 12 caracteres)" placeholderTextColor="#8492a6" value={invitePassword} onChangeText={setInvitePassword} secureTextEntry autoCapitalize="none" />
+          <TextInput style={styles.input} placeholder="Confirma tu contraseña" placeholderTextColor="#8492a6" value={invitePasswordConfirm} onChangeText={setInvitePasswordConfirm} secureTextEntry autoCapitalize="none" onSubmitEditing={handleAcceptLeaderInvitation} />
+          {!!inviteError && <Text style={styles.authErrorText}>{inviteError}</Text>}
+          {!!inviteInfo && <Text style={{ color: '#a7f3d0', fontSize: 12, lineHeight: 18, marginBottom: 12 }}>{inviteInfo}</Text>}
+          <TouchableOpacity style={[styles.actionBtn, inviteLoading && { opacity: 0.6 }]} onPress={handleAcceptLeaderInvitation} disabled={inviteLoading}>
+            <Text style={styles.actionBtnText}>{inviteLoading ? 'Activando acceso…' : 'Crear cuenta y activar acceso'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.forgotPasswordBtn} onPress={() => {
+            const email = new URLSearchParams(window.location.search).get('email') || '';
+            setAuthEmail(email); setAuthError(''); setShowAdminSelectionModal(true);
+          }}>
+            <Text style={styles.forgotPasswordText}>Ya confirmé mi correo: ingresar</Text>
+          </TouchableOpacity>
+        </View>
+        <Modal visible={showAdminSelectionModal} transparent animationType="fade">
+          <View style={styles.modalOverlay}><View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Ingresar con mi cuenta</Text>
+            <TextInput style={styles.input} placeholder="Correo electrónico" placeholderTextColor="#8492a6" value={authEmail} onChangeText={setAuthEmail} autoCapitalize="none" keyboardType="email-address" />
+            <TextInput style={styles.input} placeholder="Contraseña" placeholderTextColor="#8492a6" value={authPassword} onChangeText={setAuthPassword} secureTextEntry onSubmitEditing={handleAdminLogin} />
+            {!!authError && <Text style={styles.authErrorText}>{authError}</Text>}
+            <TouchableOpacity style={styles.actionBtn} onPress={handleAdminLogin}><Text style={styles.actionBtnText}>Ingresar</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.forgotPasswordBtn} onPress={() => setShowAdminSelectionModal(false)}><Text style={styles.forgotPasswordText}>Volver a la invitación</Text></TouchableOpacity>
+          </View></View>
+        </Modal>
+      </SafeAreaView>
+    );
+  }
 
   if (!currentRole) {
     return (
@@ -1026,6 +1243,80 @@ export default function App() {
                   )}
                 </>
               )}
+            </ScrollView>
+          )}
+
+
+          {activeTab === 'leaders' && ['pastor', 'secretario'].includes(currentRole) && (
+            <ScrollView style={styles.content}>
+              <Text style={styles.sectionTitle}>📨 Gestión de líderes · 2026</Text>
+              <Text style={styles.cardSub}>Administración exclusiva de Secretaría y Pastor. Las invitaciones son individuales, vencen en 7 días y solo pueden usarse una vez.</Text>
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>1. Convocatoria</Text>
+                <TextInput style={styles.input} placeholder="Nombre de la convocatoria" placeholderTextColor="#8492a6" value={newCampaignTitle} onChangeText={setNewCampaignTitle} />
+                <TouchableOpacity style={styles.actionBtn} onPress={handleCreateLeaderCampaign} disabled={leadersLoading}><Text style={styles.actionBtnText}>Crear convocatoria 2026</Text></TouchableOpacity>
+                {leaderCampaigns.map(campaign => (
+                  <TouchableOpacity key={campaign.id} onPress={() => setActiveCampaignId(campaign.id)}
+                    style={{ padding: 10, marginTop: 8, borderRadius: 8, borderWidth: 1, borderColor: activeCampaignId === campaign.id ? '#2dd4bf' : '#344256', backgroundColor: '#202d40' }}>
+                    <Text style={{ color: activeCampaignId === campaign.id ? '#2dd4bf' : '#fff', fontWeight: '700' }}>{activeCampaignId === campaign.id ? '✓ ' : ''}{campaign.title}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>2. Registrar líder</Text>
+                <TextInput style={styles.input} placeholder="Nombre completo *" placeholderTextColor="#8492a6" value={newLeaderName} onChangeText={setNewLeaderName} />
+                <TextInput style={styles.input} placeholder="Correo electrónico *" placeholderTextColor="#8492a6" value={newLeaderEmail} onChangeText={setNewLeaderEmail} keyboardType="email-address" autoCapitalize="none" />
+                <TextInput style={styles.input} placeholder="Celular / WhatsApp (opcional)" placeholderTextColor="#8492a6" value={newLeaderPhone} onChangeText={setNewLeaderPhone} keyboardType="phone-pad" />
+                <TextInput style={styles.input} placeholder="Comité o área (opcional)" placeholderTextColor="#8492a6" value={newLeaderCommittee} onChangeText={setNewLeaderCommittee} />
+                <TouchableOpacity style={styles.actionBtn} onPress={handleSaveLeaderDirectory}><Text style={styles.actionBtnText}>Guardar en directorio 2026</Text></TouchableOpacity>
+              </View>
+              <View style={styles.card}>
+                <View style={styles.cardHeaderRow}>
+                  <Text style={styles.cardTitle}>3. Seleccionar destinatarios</Text>
+                  <Text style={{ color: '#9ca3af', fontSize: 11 }}>{selectedLeaderIds.length} seleccionados</Text>
+                </View>
+                {leadersList.length === 0 ? <Text style={styles.cardSub}>Aún no hay líderes registrados para 2026.</Text> : leadersList.map(person => (
+                  <TouchableOpacity key={person.id} onPress={() => toggleLeaderSelection(person.id)}
+                    style={{ padding: 12, marginTop: 8, borderRadius: 10, backgroundColor: selectedLeaderIds.includes(person.id) ? '#123b3a' : '#202d40', borderWidth: 1, borderColor: selectedLeaderIds.includes(person.id) ? '#2dd4bf' : '#344256' }}>
+                    <Text style={{ color: '#fff', fontWeight: '700' }}>{selectedLeaderIds.includes(person.id) ? '☑ ' : '☐ '}{person.full_name}</Text>
+                    <Text style={styles.cardSub}>{person.email}{person.committee ? ' · ' + person.committee : ''}</Text>
+                    {!!person.phone && <Text style={styles.cardSub}>{person.phone}</Text>}
+                  </TouchableOpacity>
+                ))}
+                <TouchableOpacity style={[styles.actionBtn, { marginTop: 14 }]} onPress={handleGenerateLeaderInvitations} disabled={leadersLoading || selectedLeaderIds.length === 0}>
+                  <Text style={styles.actionBtnText}>{leadersLoading ? 'Procesando…' : 'Generar invitaciones seleccionadas'}</Text>
+                </TouchableOpacity>
+              </View>
+              {generatedInviteLinks.length > 0 && (
+                <View style={styles.card}>
+                  <Text style={styles.cardTitle}>4. Enlaces listos para WhatsApp</Text>
+                  <Text style={styles.cardSub}>Pulsa cada botón para abrir el mensaje individual. Debes completar el envío en WhatsApp; la aplicación no afirma que el mensaje haya sido enviado o leído.</Text>
+                  {generatedInviteLinks.map(item => (
+                    <View key={item.personId} style={{ borderTopWidth: 1, borderColor: '#344256', paddingTop: 10, marginTop: 10 }}>
+                      <Text style={{ color: '#fff', fontWeight: '700' }}>{item.fullName}</Text>
+                      <Text style={styles.cardSub}>Vence: {new Date(item.expiresAt).toLocaleString('es-CO')}</Text>
+                      <TouchableOpacity style={styles.actionBtn} onPress={() => openLeaderWhatsApp(item.whatsappUrl)}><Text style={styles.actionBtnText}>Abrir WhatsApp para enviar</Text></TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              )}
+              <View style={styles.card}>
+                <View style={styles.cardHeaderRow}>
+                  <Text style={styles.cardTitle}>Estado de invitaciones</Text>
+                  <TouchableOpacity onPress={loadLeaderManagement}><Text style={{ color: '#2dd4bf', fontWeight: '700' }}>Actualizar</Text></TouchableOpacity>
+                </View>
+                {leaderInvitations.length === 0 ? <Text style={styles.cardSub}>Todavía no se han generado invitaciones.</Text> : leaderInvitations.map(item => {
+                  const expired = item.status === 'generated' && new Date(item.expires_at).getTime() <= Date.now();
+                  const status = expired ? 'Vencida' : item.status === 'accepted' ? 'Cuenta activada' : item.status === 'revoked' ? 'Reemplazada' : 'Generada · pendiente de envío';
+                  return (
+                    <View key={item.id} style={{ borderTopWidth: 1, borderColor: '#344256', paddingTop: 9, marginTop: 9 }}>
+                      <Text style={{ color: '#fff', fontWeight: '700' }}>{item.leader_directory?.full_name || item.email}</Text>
+                      <Text style={styles.cardSub}>{item.email} · {status}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+              {!!leadersMessage && <Text style={styles.cardSub}>{leadersMessage}</Text>}
             </ScrollView>
           )}
 
