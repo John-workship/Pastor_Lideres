@@ -10,7 +10,8 @@ import {
   Platform,
   Dimensions,
   Switch,
-  Modal
+  Modal,
+  Linking
 } from 'react-native';
 import { createClient } from '@supabase/supabase-js';
 
@@ -24,35 +25,50 @@ if (Platform.OS !== 'web') {
   WebView = require('react-native-webview').WebView;
 }
 
+const monthKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+const dateKey = (date) => `${monthKey(date)}-${String(date.getDate()).padStart(2, '0')}`;
+const formatMonthLabel = (date) => date.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' }).toUpperCase();
+
 export default function App() {
   const [currentRole, setCurrentRole] = useState(null);
-  
+  const [currentUser, setCurrentUser] = useState(null);
+  const [currentProfile, setCurrentProfile] = useState(null);
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [passwordChangeError, setPasswordChangeError] = useState('');
+  const [passwordChangeLoading, setPasswordChangeLoading] = useState(false);
   const [showGeneralModal, setShowGeneralModal] = useState(false);
   const [showAdminSelectionModal, setShowAdminSelectionModal] = useState(false);
-
   const [generalFirstName, setGeneralFirstName] = useState('');
   const [generalLastName, setGeneralLastName] = useState('');
   const [activeGeneralUsers, setActiveGeneralUsers] = useState([]);
 
-  const [targetRoleToLogin, setTargetRoleToLogin] = useState(null);
-  const [passwordInput, setPasswordInput] = useState('');
-  
-  const [adminRoles, setAdminRoles] = useState([
-    { id: 'pastor', name: 'Pastor', key: '6789', icon: '📖', isVisible: true },
-    { id: 'secretario', name: 'Secretario(a)', key: '5555', icon: '📋', isVisible: true },
-    { id: 'tesorero', name: 'Tesorero(a)', key: '3333', icon: '💰', isVisible: true },
-    { id: 'lideres', name: 'Líderes', key: '1234', icon: '👥', isVisible: false }
-  ]);
-
-  const [editingRoleId, setEditingRoleId] = useState(null);
-  const [tempRoleName, setTempRoleName] = useState('');
-  const [tempRoleKey, setTempRoleKey] = useState('');
-
-  const [showCreateNewRoleForm, setShowCreateNewRoleForm] = useState(false);
-  const [newRoleName, setNewRoleName] = useState('');
-  const [newRoleKey, setNewRoleKey] = useState('');
-
   const [activeTab, setActiveTab] = useState('home');
+  const [inviteToken] = useState(() => Platform.OS === 'web' && typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('invite') || '' : '');
+  const [inviteFullName, setInviteFullName] = useState('');
+  const [invitePassword, setInvitePassword] = useState('');
+  const [invitePasswordConfirm, setInvitePasswordConfirm] = useState('');
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteError, setInviteError] = useState('');
+  const [inviteInfo, setInviteInfo] = useState('');
+  const [inviteTokenConsumed, setInviteTokenConsumed] = useState(false);
+  const [leadersList, setLeadersList] = useState([]);
+  const [leaderInvitations, setLeaderInvitations] = useState([]);
+  const [leaderCampaigns, setLeaderCampaigns] = useState([]);
+  const [activeCampaignId, setActiveCampaignId] = useState(null);
+  const [newCampaignTitle, setNewCampaignTitle] = useState('Convocatoria de líderes 2026');
+  const [newLeaderName, setNewLeaderName] = useState('');
+  const [newLeaderEmail, setNewLeaderEmail] = useState('');
+  const [newLeaderPhone, setNewLeaderPhone] = useState('');
+  const [newLeaderCommittee, setNewLeaderCommittee] = useState('');
+  const [selectedLeaderIds, setSelectedLeaderIds] = useState([]);
+  const [generatedInviteLinks, setGeneratedInviteLinks] = useState([]);
+  const [leadersLoading, setLeadersLoading] = useState(false);
+  const [leadersMessage, setLeadersMessage] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [isProjectorMode, setIsProjectorMode] = useState(false);
   
@@ -69,13 +85,13 @@ export default function App() {
   const getRoleDashboardItems = () => {
     if (currentRole === 'general') {
       return [
-        { key: 'live', title: 'Transmisión en Vivo', subtitle: 'Sigue el culto y la palabra en directo', icon: '📺', color: '#00ffcc' },
+        { key: 'live', title: 'Transmisión en Vivo', subtitle: 'Sigue el culto y la palabra en directo', icon: '📺', color: '#2dd4bf' },
         { key: 'prayers', title: 'Red de Oración', subtitle: 'Publica y únete a peticiones de la hermandad', icon: '🙏', color: '#34d399' }
       ];
     }
     if (currentRole === 'tesorero') {
       return [
-        { key: 'finance', title: 'Tesorería y Fondos', subtitle: 'Control de diezmos, ofrendas y finanzas', icon: '💰', color: '#00ffcc' },
+        { key: 'finance', title: 'Tesorería y Fondos', subtitle: 'Control de diezmos, ofrendas y finanzas', icon: '💰', color: '#2dd4bf' },
         { key: 'live', title: 'Transmisión en Vivo', subtitle: 'Visualiza la señal del culto actual', icon: '📺', color: '#34d399' },
         { key: 'comites', title: 'Comités de Trabajo', subtitle: 'Listado de comités de la iglesia', icon: '👥', color: '#fbbf24' },
         { key: 'services', title: 'Calendario de Cultos', subtitle: 'Consulta los eventos programados', icon: '📋', color: '#a78bfa' }
@@ -83,26 +99,28 @@ export default function App() {
     }
     if (currentRole === 'secretario') {
       return [
-        { key: 'live', title: 'Transmisión en Vivo', subtitle: 'Monitorea la señal del culto', icon: '📺', color: '#00ffcc' },
+        { key: 'live', title: 'Transmisión en Vivo', subtitle: 'Monitorea la señal del culto', icon: '📺', color: '#2dd4bf' },
         { key: 'comites', title: 'Comités de Trabajo', subtitle: 'Gestiona líderes y secretarios de comités', icon: '👥', color: '#34d399' },
+        { key: 'leaders', title: 'Gestión de líderes', subtitle: 'Directorio e invitaciones para 2026', icon: '📨', color: '#60a5fa' },
         { key: 'services', title: 'Calendario de Cultos', subtitle: 'Programa y organiza los eventos y cultos', icon: '📋', color: '#fbbf24' },
         { key: 'finance', title: 'Tesorería (Visualización)', subtitle: 'Consulta los fondos y reportes financieros', icon: '💰', color: '#a78bfa' }
       ];
     }
     if (currentRole === 'lideres' || (!['pastor', 'secretario', 'tesorero', 'general'].includes(currentRole) && currentRole !== null)) {
       return [
-        { key: 'live', title: 'Transmisión en Vivo', subtitle: 'Sigue el culto en directo', icon: '📺', color: '#00ffcc' },
+        { key: 'live', title: 'Transmisión en Vivo', subtitle: 'Sigue el culto en directo', icon: '📺', color: '#2dd4bf' },
         { key: 'comites', title: 'Comités de Trabajo', subtitle: 'Consulta los comités y líderes de área', icon: '👥', color: '#fbbf24' },
         { key: 'prayers', title: 'Red de Oración', subtitle: 'Visualiza y participa en peticiones', icon: '🙏', color: '#34d399' },
         { key: 'services', title: 'Calendario de Cultos', subtitle: 'Consulta la agenda y eventos programados', icon: '📋', color: '#a78bfa' }
       ];
     }
     return [
-      { key: 'live', title: 'Transmisión en Vivo', subtitle: 'Administra sedes y el reproductor en directo', icon: '📺', color: '#00ffcc' },
+      { key: 'live', title: 'Transmisión en Vivo', subtitle: 'Administra sedes y el reproductor en directo', icon: '📺', color: '#2dd4bf' },
       { key: 'prayers', title: 'Red de Oración', subtitle: 'Gestiona peticiones y marca respondidas', icon: '🙏', color: '#34d399' },
       { key: 'comites', title: 'Comités de Trabajo', subtitle: 'Organiza líderes, comités y secretarios', icon: '👥', color: '#fbbf24' },
       { key: 'finance', title: 'Tesorería y Fondos', subtitle: 'Administra fondos, ofrendas y cuentas', icon: '💰', color: '#a78bfa' },
       { key: 'services', title: 'Calendario de Cultos', subtitle: 'Planifica la agenda de servicios y eventos', icon: '📋', color: '#f472b6' },
+      { key: 'leaders', title: 'Gestión de líderes', subtitle: 'Directorio e invitaciones para 2026', icon: '📨', color: '#60a5fa' },
       { key: 'users', title: 'Gestión de Accesos', subtitle: 'Modifica perfiles, visibilidad y claves', icon: '🔐', color: '#60a5fa' }
     ];
   };
@@ -122,7 +140,6 @@ export default function App() {
   const [prayers, setPrayers] = useState([]);
   const [newPrayerName, setNewPrayerName] = useState('');
   const [newPrayerRequest, setNewPrayerRequest] = useState('');
-  const [myLocalPrayerIds, setMyLocalPrayerIds] = useState([]);
   
   const [editingPrayerId, setEditingPrayerId] = useState(null);
   const [editingPrayerText, setEditingPrayerText] = useState('');
@@ -140,13 +157,17 @@ export default function App() {
   const [newFinanceLabel, setNewFinanceLabel] = useState('');
   const [newFinanceAmount, setNewFinanceAmount] = useState('');
 
-  // Meses visibles
-  const [activeMonths, setActiveMonths] = useState([
-    { id: '2026-11', name: 'NOVIEMBRE 2026' },
-    { id: '2026-12', name: 'DICIEMBRE 2026' }
-  ]);
-  const [currentMonth, setCurrentMonth] = useState('2026-11');
-  const [selectedDay, setSelectedDay] = useState('2026-11-05');
+  // Meses visibles: siempre comienzan en el mes local actual y el siguiente.
+  const [activeMonths, setActiveMonths] = useState(() => {
+    const today = new Date();
+    const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+    return [
+      { id: monthKey(today), name: formatMonthLabel(today) },
+      { id: monthKey(nextMonth), name: formatMonthLabel(nextMonth) }
+    ];
+  });
+  const [currentMonth, setCurrentMonth] = useState(() => monthKey(new Date()));
+  const [selectedDay, setSelectedDay] = useState(() => dateKey(new Date()));
   const [showDayModal, setShowDayModal] = useState(false);
 
   const [eventsList, setEventsList] = useState([]);
@@ -156,71 +177,56 @@ export default function App() {
   const [newEventTime, setNewEventTime] = useState('');
   const [newEventDetails, setNewEventDetails] = useState('');
 
-  const checkAndRotateMonths = async () => {
-    try {
-      const { data: eventsData } = await supabase.from('events').select('*');
-      if (eventsData && eventsData.length > 0) {
-        const uniqueMonthsInDb = [...new Set(eventsData.map(e => e.date.substring(0, 7)))].sort();
-        if (uniqueMonthsInDb.length > 2) {
-          const oldestMonth = uniqueMonthsInDb[0];
-          await supabase.from('events').delete().like('date', `${oldestMonth}%`);
-        }
-      }
-    } catch (err) {
-      console.log('Error al rotar meses en la base de datos:', err);
-    }
-  };
-
   const fetchData = async () => {
     setRefreshing(true);
     try {
-      await checkAndRotateMonths();
+      const results = await Promise.all([
+        supabase.from('sedes').select('*'),
+        supabase.from('prayers').select('*').order('id', { ascending: false }),
+        supabase.from('comites').select('*'),
+        (['pastor', 'tesorero', 'secretario'].includes(currentRole)
+          ? supabase.from('finance').select('*')
+          : Promise.resolve({ data: [], error: null })),
+        supabase.from('events').select('*').order('date', { ascending: true })
+      ]);
 
-      const { data: sedesData } = await supabase.from('sedes').select('*');
-      if (sedesData && sedesData.length > 0) {
-        const formatted = sedesData.map(s => ({ ...s, id: String(s.id) }));
-        setSedesList(formatted);
-        setSelectedSede(prev => formatted.find(s => s.id === String(prev?.id)) || formatted[0]);
-      }
+      const labels = ['sedes', 'prayers', 'comites', 'finance', 'events'];
+      results.forEach((result, index) => {
+        if (result.error) throw new Error(`Error cargando ${labels[index]}: ${result.error.message}`);
+      });
 
-      const { data: prayersData } = await supabase.from('prayers').select('*').order('id', { ascending: false });
-      if (prayersData && prayersData.length > 0) {
-        setPrayers(prayersData.map(p => ({
-          ...p,
-          status: p.status || 'active',
-          count: p.count !== undefined ? p.count : 0
-        })));
-      }
+      const [sedesResult, prayersResult, comitesResult, financeResult, eventsResult] = results;
+      const sedesData = sedesResult.data || [];
+      const prayersData = prayersResult.data || [];
+      const comitesData = comitesResult.data || [];
+      const financeData = financeResult.data || [];
+      const eventsData = eventsResult.data || [];
 
-      const { data: comitesData } = await supabase.from('comites').select('*');
-      if (comitesData && comitesData.length > 0) {
-        setComitesList(comitesData.map(c => ({
-          ...c,
-          id: String(c.id),
-          lider: c.lider || '',
-          secretario: c.secretario || ''
-        })));
-      }
+      const formattedSedes = sedesData.map(s => ({ ...s, id: String(s.id) }));
+      setSedesList(formattedSedes);
+      setSelectedSede(prev => formattedSedes.find(s => s.id === String(prev?.id)) || formattedSedes[0] || null);
 
-      const { data: financeData } = await supabase.from('finance').select('*');
-      if (financeData && financeData.length > 0) setFinanceList(financeData);
+      setPrayers(prayersData.map(p => ({
+        ...p,
+        status: p.status || 'active',
+        count: p.count !== undefined ? p.count : 0
+      })));
 
-      const { data: eventsData } = await supabase.from('events').select('*');
-      if (eventsData && eventsData.length > 0) {
-        setEventsList(eventsData);
-        const activeDates = [...new Set(eventsData.map(e => e.date.substring(0, 7)))].sort();
-        if (activeDates.length >= 2) {
-          setActiveMonths([
-            { id: activeDates[0], name: formatMonthName(activeDates[0]) },
-            { id: activeDates[1], name: formatMonthName(activeDates[1]) }
-          ]);
-        }
-      }
+      setComitesList(comitesData.map(c => ({
+        ...c,
+        id: String(c.id),
+        lider: c.lider || '',
+        secretario: c.secretario || ''
+      })));
 
+      setFinanceList(financeData);
+      setEventsList(eventsData);
     } catch (err) {
-      console.log('Error de sincronización:', err);
+      console.error('Error de sincronización:', err);
+      alert('No fue posible sincronizar toda la información. Verifica tu conexión e inténtalo de nuevo.');
+    } finally {
+      setRefreshing(false);
     }
-    setRefreshing(false);
   };
 
   const formatMonthName = (yearMonthStr) => {
@@ -237,17 +243,231 @@ export default function App() {
     fetchData();
   }, []);
 
-  const handleAdminLogin = () => {
-    const foundRole = adminRoles.find(r => r.id === targetRoleToLogin);
-    if (foundRole && passwordInput === foundRole.key) {
-      setCurrentRole(foundRole.id);
-      setActiveTab('home');
-      setTargetRoleToLogin(null);
-      setPasswordInput('');
-      setShowAdminSelectionModal(false);
-    } else {
-      alert('❌ Clave de acceso incorrecta. Inténtalo de nuevo.');
+  useEffect(() => {
+    if (['pastor', 'tesorero', 'secretario'].includes(currentRole)) fetchData();
+  }, [currentRole]);
+
+  useEffect(() => {
+    let mounted = true;
+    const syncSession = async (session) => {
+      if (!mounted) return;
+      const user = session?.user || null;
+      setCurrentUser(user);
+      if (!user) { setCurrentProfile(null); setCurrentRole(null); return; }
+      const { data, error } = await supabase.from('profiles').select('role, display_name, must_change_password').eq('id', user.id).single();
+      if (!mounted) return;
+      if (error || !data) { setCurrentProfile(null); setCurrentRole(null); return; }
+      let resolvedProfile = data;
+      if (data.role === 'pending' && inviteToken && user.email) {
+        const { error: redeemError } = await supabase.rpc('redeem_leader_invitation', {
+          p_token: inviteToken, p_user_id: user.id, p_email: user.email,
+          p_full_name: user.user_metadata?.display_name || user.email.split('@')[0]
+        });
+        if (!redeemError) {
+          const { data: refreshedProfile } = await supabase.from('profiles').select('role, display_name, must_change_password').eq('id', user.id).single();
+          if (refreshedProfile) resolvedProfile = refreshedProfile;
+        }
+      }
+      if (!['pastor', 'secretario', 'tesorero', 'lideres'].includes(resolvedProfile.role)) {
+        await supabase.auth.signOut();
+        if (mounted) { setCurrentUser(null); setCurrentProfile(null); setCurrentRole(null); }
+        return;
+      }
+      setCurrentProfile(resolvedProfile); setCurrentRole(resolvedProfile.role);
+    };
+    supabase.auth.getSession().then(({ data }) => syncSession(data.session)).catch(() => {});
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => Promise.resolve().then(() => syncSession(session)));
+    return () => { mounted = false; authListener.subscription.unsubscribe(); };
+  }, []);
+
+  const handleAdminLogin = async () => {
+    if (!authEmail.trim() || !authPassword) { setAuthError('Ingresa tu correo y contraseña.'); return; }
+    setAuthLoading(true); setAuthError('');
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email: authEmail.trim().toLowerCase(), password: authPassword });
+      if (error) throw error;
+      const { data: profileData, error: profileError } = await supabase.from('profiles').select('role, display_name, must_change_password').eq('id', data.user.id).single();
+      if (profileError || !profileData) { await supabase.auth.signOut(); throw new Error('Esta cuenta aún no tiene un perfil administrativo habilitado. Contacta al administrador.'); }
+      let resolvedProfile = profileData;
+      if (profileData.role === 'pending' && inviteToken) {
+        const { error: redeemError } = await supabase.rpc('redeem_leader_invitation', {
+          p_token: inviteToken, p_user_id: data.user.id, p_email: data.user.email,
+          p_full_name: data.user.user_metadata?.display_name || data.user.email.split('@')[0]
+        });
+        if (!redeemError) {
+          const { data: refreshedProfile } = await supabase.from('profiles').select('role, display_name, must_change_password').eq('id', data.user.id).single();
+          if (refreshedProfile) resolvedProfile = refreshedProfile;
+        }
+      }
+      if (!['pastor', 'secretario', 'tesorero', 'lideres'].includes(resolvedProfile.role)) { await supabase.auth.signOut(); throw new Error('Esta cuenta no tiene permisos administrativos asignados.'); }
+      setCurrentUser(data.user); setCurrentProfile(resolvedProfile); setCurrentRole(resolvedProfile.role); setActiveTab('home'); setAuthPassword(''); setShowAdminSelectionModal(false);
+    } catch (error) { setAuthError(error?.message || 'No fue posible iniciar sesión.'); }
+    finally { setAuthLoading(false); }
+  };
+
+
+  const loadLeaderManagement = async () => {
+    if (!['pastor', 'secretario'].includes(currentRole)) return;
+    setLeadersLoading(true);
+    setLeadersMessage('');
+    try {
+      const [people, campaigns, invitations] = await Promise.all([
+        supabase.from('leader_directory').select('*').eq('period_year', 2026).order('full_name'),
+        supabase.from('leader_campaigns').select('*').eq('period_year', 2026).order('created_at', { ascending: false }),
+        supabase.from('leader_invitations').select('id,email,status,expires_at,created_at,accepted_at,leader_directory(full_name,phone,committee)').order('created_at', { ascending: false }).limit(100)
+      ]);
+      if (people.error) throw people.error;
+      if (campaigns.error) throw campaigns.error;
+      if (invitations.error) throw invitations.error;
+      setLeadersList(people.data || []);
+      setLeaderCampaigns(campaigns.data || []);
+      setLeaderInvitations(invitations.data || []);
+      setActiveCampaignId(prev => prev || campaigns.data?.[0]?.id || null);
+    } catch (error) {
+      setLeadersMessage('No fue posible cargar el directorio: ' + (error.message || 'Error de conexión'));
+    } finally {
+      setLeadersLoading(false);
     }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'leaders') loadLeaderManagement();
+  }, [activeTab, currentRole]);
+
+  const handleCreateLeaderCampaign = async () => {
+    if (!['pastor', 'secretario'].includes(currentRole) || !newCampaignTitle.trim()) return;
+    setLeadersLoading(true);
+    const { data, error } = await supabase.from('leader_campaigns').insert({
+      title: newCampaignTitle.trim(), period_year: 2026, created_by: currentUser.id
+    }).select().single();
+    setLeadersLoading(false);
+    if (error) { setLeadersMessage('No se pudo crear la convocatoria: ' + error.message); return; }
+    setLeaderCampaigns(prev => [data, ...prev]);
+    setActiveCampaignId(data.id);
+    setLeadersMessage('Convocatoria creada correctamente.');
+  };
+
+  const handleSaveLeaderDirectory = async () => {
+    if (!['pastor', 'secretario'].includes(currentRole)) return;
+    if (!newLeaderName.trim() || !newLeaderEmail.trim()) {
+      setLeadersMessage('El nombre y el correo son obligatorios.');
+      return;
+    }
+    const { data, error } = await supabase.from('leader_directory').insert({
+      full_name: newLeaderName.trim(), email: newLeaderEmail.trim().toLowerCase(),
+      phone: newLeaderPhone.trim() || null, committee: newLeaderCommittee.trim() || null,
+      period_year: 2026, created_by: currentUser.id
+    }).select().single();
+    if (error) { setLeadersMessage('No se pudo registrar: ' + error.message); return; }
+    setLeadersList(prev => [...prev, data].sort((a,b) => a.full_name.localeCompare(b.full_name)));
+    setNewLeaderName(''); setNewLeaderEmail(''); setNewLeaderPhone(''); setNewLeaderCommittee('');
+    setLeadersMessage('Líder registrado en el directorio 2026.');
+  };
+
+  const toggleLeaderSelection = (id) => {
+    setSelectedLeaderIds(prev => prev.includes(id) ? prev.filter(value => value !== id) : [...prev, id]);
+  };
+
+  const handleGenerateLeaderInvitations = async () => {
+    if (!['pastor', 'secretario'].includes(currentRole) || selectedLeaderIds.length === 0) return;
+    setLeadersLoading(true);
+    setLeadersMessage('');
+    const createdLinks = [];
+    for (const personId of selectedLeaderIds) {
+      const person = leadersList.find(item => item.id === personId);
+      if (!person) continue;
+      const { data, error } = await supabase.rpc('create_leader_invitation', {
+        p_person_id: personId, p_campaign_id: activeCampaignId || null
+      });
+      if (error || !data?.[0]?.invitation_token) {
+        setLeadersMessage('No se pudo generar la invitación de ' + person.full_name + ': ' + (error?.message || 'Respuesta inválida'));
+        continue;
+      }
+      const token = data[0].invitation_token;
+      const inviteUrl = 'https://ipuc-lideres.vercel.app/?invite=' + encodeURIComponent(token) + '&email=' + encodeURIComponent(person.email);
+      const message = 'Hola ' + person.full_name + '. Te invitamos a activar tu acceso como líder de IPUC Mosquera 3 para el periodo 2026. Abre este enlace personal y define tu contraseña: ' + inviteUrl + ' (Válido por 7 días; no lo compartas).';
+      const phone = (person.phone || '').replace(/[^0-9]/g, '');
+      const whatsappUrl = 'https://wa.me/' + phone + '?text=' + encodeURIComponent(message);
+      createdLinks.push({ personId, fullName: person.full_name, inviteUrl, whatsappUrl, expiresAt: data[0].expires_at });
+    }
+    setGeneratedInviteLinks(prev => [...createdLinks, ...prev.filter(old => !createdLinks.some(next => next.personId === old.personId))]);
+    setSelectedLeaderIds([]);
+    setLeadersLoading(false);
+    await loadLeaderManagement();
+    if (createdLinks.length) setLeadersMessage('Enlaces individuales generados. La invitación solo queda enviada cuando completes el envío desde WhatsApp.');
+  };
+
+  const openLeaderWhatsApp = async (url) => {
+    try { await Linking.openURL(url); }
+    catch (error) { setLeadersMessage('No fue posible abrir WhatsApp en este dispositivo.'); }
+  };
+
+  const handleAcceptLeaderInvitation = async () => {
+    setInviteError(''); setInviteInfo('');
+    if (!inviteToken) { setInviteError('El enlace no contiene un código de invitación.'); return; }
+    if (inviteFullName.trim().length < 2) { setInviteError('Escribe tu nombre completo.'); return; }
+    if (invitePassword.length < 12) { setInviteError('La contraseña debe tener al menos 12 caracteres.'); return; }
+    if (invitePassword !== invitePasswordConfirm) { setInviteError('Las contraseñas no coinciden.'); return; }
+    setInviteLoading(true);
+    try {
+      const email = new URLSearchParams(window.location.search).get('email') || '';
+      if (!email) throw new Error('El enlace no incluye el correo asociado. Solicita al secretario un nuevo enlace.');
+      const { data, error } = await supabase.auth.signUp({
+        email: email.toLowerCase(), password: invitePassword,
+        options: {
+          data: { display_name: inviteFullName.trim() },
+          emailRedirectTo: 'https://ipuc-lideres.vercel.app/?invite=' + encodeURIComponent(inviteToken) + '&email=' + encodeURIComponent(email)
+        }
+      });
+      if (error) throw error;
+      if (data.session && data.user) {
+        const { error: redeemError } = await supabase.rpc('redeem_leader_invitation', {
+          p_token: inviteToken, p_user_id: data.user.id, p_email: data.user.email,
+          p_full_name: inviteFullName.trim()
+        });
+        if (redeemError) throw redeemError;
+        const { data: profile } = await supabase.from('profiles').select('role,display_name,must_change_password').eq('id', data.user.id).single();
+        setCurrentUser(data.user); setCurrentProfile(profile); setCurrentRole(profile?.role || 'lideres');
+        setInviteTokenConsumed(true);
+      } else {
+        setInviteInfo('Cuenta creada. Revisa el correo de verificación de Supabase. Después de confirmarlo, vuelve a abrir este enlace e ingresa con tu correo y contraseña.');
+      }
+    } catch (error) {
+      setInviteError(error.message || 'No fue posible activar la invitación.');
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
+  const handleFirstPasswordChange = async () => {
+    setPasswordChangeError('');
+    if (newPassword.length < 12) {
+      setPasswordChangeError('La nueva contraseña debe tener al menos 12 caracteres.');
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setPasswordChangeError('Las contraseñas no coinciden.');
+      return;
+    }
+    setPasswordChangeLoading(true);
+    try {
+      const { error: passwordError } = await supabase.auth.updateUser({ password: newPassword });
+      if (passwordError) throw passwordError;
+      const { error: completionError } = await supabase.rpc('complete_password_setup');
+      if (completionError) throw completionError;
+      setCurrentProfile(prev => ({ ...prev, must_change_password: false }));
+      setNewPassword('');
+      setConfirmNewPassword('');
+    } catch (error) {
+      setPasswordChangeError(error?.message || 'No fue posible actualizar la contraseña.');
+    } finally {
+      setPasswordChangeLoading(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    if (currentUser) { const { error } = await supabase.auth.signOut(); if (error) alert('No fue posible cerrar sesión: ' + error.message); }
+    setCurrentUser(null); setCurrentProfile(null); setCurrentRole(null); setActiveTab('home'); setAuthPassword(''); setAuthError('');
   };
 
   const handleGeneralLogin = () => {
@@ -270,46 +490,6 @@ export default function App() {
     setCurrentRole('general');
     setActiveTab('home');
     setShowGeneralModal(false);
-  };
-
-  const handleSaveSingleRole = (roleId) => {
-    if (!tempRoleName.trim() || !tempRoleKey.trim()) {
-      alert('⚠️ El nombre y la clave no pueden estar vacíos.');
-      return;
-    }
-    setAdminRoles(prev => prev.map(r => r.id === roleId ? { ...r, name: tempRoleName.trim(), key: tempRoleKey.trim() } : r));
-    setEditingRoleId(null);
-    alert('✅ ¡Perfil actualizado con éxito!');
-  };
-
-  const handleToggleRoleVisibility = (roleId) => {
-    setAdminRoles(prev => prev.map(r => r.id === roleId ? { ...r, isVisible: !r.isVisible } : r));
-  };
-
-  const handleAddNewRole = () => {
-    if (!newRoleName.trim() || !newRoleKey.trim()) {
-      alert('⚠️ Por favor ingresa el nombre del cargo y su respectiva clave.');
-      return;
-    }
-    const newId = newRoleName.trim().toLowerCase().replace(/\s+/g, '_');
-    if (adminRoles.some(r => r.id === newId)) {
-      alert('⚠️ Ya existe un perfil con un nombre similar.');
-      return;
-    }
-
-    setAdminRoles(prev => [...prev, { id: newId, name: newRoleName.trim(), key: newRoleKey.trim(), icon: '👥', isVisible: false }]);
-    setNewRoleName('');
-    setNewRoleKey('');
-    setShowCreateNewRoleForm(false);
-    alert('✅ ¡Nuevo perfil de líderes creado (oculto por defecto)!');
-  };
-
-  const handleDeleteAdminRole = (roleId) => {
-    if (roleId === 'pastor') {
-      alert('⚠️ No se puede eliminar el perfil principal del Pastor.');
-      return;
-    }
-    setAdminRoles(prev => prev.filter(r => r.id !== roleId));
   };
 
   const handleSaveSede = async () => {
@@ -367,16 +547,20 @@ export default function App() {
     };
 
     setPrayers(prev => [newObj, ...prev]);
-    if (currentRole === 'general' || currentRole === 'lideres') {
-      setMyLocalPrayerIds(prev => [...prev, newId]);
+    const { error: insertError } = await supabase.from('prayers').insert([{
+      id: newId, name: authorName, request: newPrayerRequest.trim()
+    }]);
+    if (insertError) {
+      setPrayers(prev => prev.filter(p => p.id !== newId));
+      alert('No fue posible publicar la petición. Inténtalo de nuevo.');
+      return;
     }
-    await supabase.from('prayers').insert([newObj]);
     setNewPrayerName('');
     setNewPrayerRequest('');
   };
 
   const handleSaveEditedPrayer = async (id) => {
-    if (!editingPrayerText.trim()) return;
+    if (currentRole !== 'pastor' || !editingPrayerText.trim()) return;
     setPrayers(prev => prev.map(p => p.id === id ? { ...p, request: editingPrayerText.trim() } : p));
     await supabase.from('prayers').update({ request: editingPrayerText.trim() }).eq('id', id);
     setEditingPrayerId(null);
@@ -384,9 +568,9 @@ export default function App() {
   };
 
   const handleSupportPrayer = async (item) => {
-    const updatedCount = (item.count || 0) + 1;
-    setPrayers(prev => prev.map(p => p.id === item.id ? { ...p, count: updatedCount } : p));
-    await supabase.from('prayers').update({ count: updatedCount }).eq('id', item.id);
+    const { data, error } = await supabase.rpc('increment_prayer_support', { p_prayer_id: String(item.id) });
+    if (error) { alert('No fue posible registrar tu apoyo. Inténtalo de nuevo.'); return; }
+    setPrayers(prev => prev.map(p => p.id === item.id ? { ...p, count: data } : p));
   };
 
   const togglePrayerStatus = async (item) => {
@@ -397,8 +581,7 @@ export default function App() {
   };
 
   const handleDeletePrayer = async (id) => {
-    if (['tesorero', 'secretario'].includes(currentRole)) return;
-    if ((currentRole === 'general' || currentRole === 'lideres') && !myLocalPrayerIds.includes(String(id))) return;
+    if (currentRole !== 'pastor') return;
     setPrayers(prev => prev.filter(p => p.id !== String(id)));
     await supabase.from('prayers').delete().eq('id', String(id));
   };
@@ -434,7 +617,7 @@ export default function App() {
       id: editingFinanceId ? String(editingFinanceId) : String(Date.now()),
       label: newFinanceLabel.trim() || 'Fondo',
       amount: newFinanceAmount.trim() || '$ 0.00',
-      color: '#00ffcc'
+      color: '#2dd4bf'
     };
     setFinanceList(prev => editingFinanceId ? prev.map(f => f.id === payload.id ? payload : f) : [...prev, payload]);
     await supabase.from('finance').upsert([payload]);
@@ -511,16 +694,51 @@ export default function App() {
 
   const calendarMatrix = getCalendarMatrix(currentMonth);
 
-  const userDisplayName = generalFirstName && generalLastName 
-    ? `${generalFirstName} ${generalLastName}` 
-    : 'Invitado';
+  const userDisplayName = currentProfile?.display_name || currentUser?.email || (generalFirstName && generalLastName ? `${generalFirstName} ${generalLastName}` : 'Invitado');
+
+
+  if (!currentRole && inviteToken && !inviteTokenConsumed) {
+    return (
+      <SafeAreaView style={styles.welcomeContainer}>
+        <View style={styles.welcomeCard}>
+          <Text style={styles.welcomeEmoji}>📨</Text>
+          <Text style={styles.welcomeTitle}>Activa tu acceso de líder</Text>
+          <Text style={styles.welcomeSubtitle}>Invitación personal para el periodo 2026 de IPUC Mosquera 3. Define tu contraseña para activar tu cuenta.</Text>
+          <TextInput style={styles.input} placeholder="Nombre completo" placeholderTextColor="#8492a6" value={inviteFullName} onChangeText={setInviteFullName} autoCapitalize="words" />
+          <TextInput style={styles.input} placeholder="Contraseña (mínimo 12 caracteres)" placeholderTextColor="#8492a6" value={invitePassword} onChangeText={setInvitePassword} secureTextEntry autoCapitalize="none" />
+          <TextInput style={styles.input} placeholder="Confirma tu contraseña" placeholderTextColor="#8492a6" value={invitePasswordConfirm} onChangeText={setInvitePasswordConfirm} secureTextEntry autoCapitalize="none" onSubmitEditing={handleAcceptLeaderInvitation} />
+          {!!inviteError && <Text style={styles.authErrorText}>{inviteError}</Text>}
+          {!!inviteInfo && <Text style={{ color: '#a7f3d0', fontSize: 12, lineHeight: 18, marginBottom: 12 }}>{inviteInfo}</Text>}
+          <TouchableOpacity style={[styles.actionBtn, inviteLoading && { opacity: 0.6 }]} onPress={handleAcceptLeaderInvitation} disabled={inviteLoading}>
+            <Text style={styles.actionBtnText}>{inviteLoading ? 'Activando acceso…' : 'Crear cuenta y activar acceso'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.forgotPasswordBtn} onPress={() => {
+            const email = new URLSearchParams(window.location.search).get('email') || '';
+            setAuthEmail(email); setAuthError(''); setShowAdminSelectionModal(true);
+          }}>
+            <Text style={styles.forgotPasswordText}>Ya confirmé mi correo: ingresar</Text>
+          </TouchableOpacity>
+        </View>
+        <Modal visible={showAdminSelectionModal} transparent animationType="fade">
+          <View style={styles.modalOverlay}><View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Ingresar con mi cuenta</Text>
+            <TextInput style={styles.input} placeholder="Correo electrónico" placeholderTextColor="#8492a6" value={authEmail} onChangeText={setAuthEmail} autoCapitalize="none" keyboardType="email-address" />
+            <TextInput style={styles.input} placeholder="Contraseña" placeholderTextColor="#8492a6" value={authPassword} onChangeText={setAuthPassword} secureTextEntry onSubmitEditing={handleAdminLogin} />
+            {!!authError && <Text style={styles.authErrorText}>{authError}</Text>}
+            <TouchableOpacity style={styles.actionBtn} onPress={handleAdminLogin}><Text style={styles.actionBtnText}>Ingresar</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.forgotPasswordBtn} onPress={() => setShowAdminSelectionModal(false)}><Text style={styles.forgotPasswordText}>Volver a la invitación</Text></TouchableOpacity>
+          </View></View>
+        </Modal>
+      </SafeAreaView>
+    );
+  }
 
   if (!currentRole) {
     return (
       <SafeAreaView style={styles.welcomeContainer}>
         <View style={styles.welcomeCard}>
           <Text style={styles.welcomeEmoji}>🏛️</Text>
-          <Text style={styles.welcomeTitle}>Portal Congregacional</Text>
+          <Text style={styles.welcomeTitle}>IPUC Líderes</Text>
           <Text style={styles.welcomeSubtitle}>Selecciona tu modo de ingreso para continuar</Text>
 
           <TouchableOpacity 
@@ -533,7 +751,7 @@ export default function App() {
 
           <TouchableOpacity 
             style={styles.welcomeAdminBtn} 
-            onPress={() => { setTargetRoleToLogin(null); setPasswordInput(''); setShowAdminSelectionModal(true); }}
+            onPress={() => { setAuthEmail(''); setAuthPassword(''); setAuthError(''); setShowAdminSelectionModal(true); }}
           >
             <Text style={styles.welcomeAdminBtnText}>🔐 Accesos Administrativos</Text>
             <Text style={styles.welcomeAdminBtnSub}>Pastor, Secretario(a), Tesorero(a) y Líderes</Text>
@@ -565,7 +783,7 @@ export default function App() {
 
               <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
                 <TouchableOpacity 
-                  style={[styles.actionBtn, { backgroundColor: '#374151', flex: 1 }]} 
+                  style={[styles.actionBtn, { backgroundColor: '#344256', flex: 1 }]} 
                   onPress={() => setShowGeneralModal(false)}
                 >
                   <Text style={{ color: '#fff', fontWeight: 'bold' }}>Cancelar</Text>
@@ -585,67 +803,30 @@ export default function App() {
         <Modal visible={showAdminSelectionModal} transparent animationType="fade">
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              
-              {targetRoleToLogin === null ? (
-                <>
-                  <Text style={styles.modalTitle}>🔐 Selecciona tu Cargo</Text>
-                  <Text style={styles.modalSub}>Elige tu perfil administrativo para continuar:</Text>
-                  
-                  <View style={{ gap: 10, marginVertical: 10 }}>
-                    {adminRoles.filter(role => role.isVisible).map(role => (
-                      <TouchableOpacity 
-                        key={role.id}
-                        style={styles.adminRoleBtnInside} 
-                        onPress={() => { setTargetRoleToLogin(role.id); setPasswordInput(''); }}
-                      >
-                        <Text style={styles.adminRoleTextInside}>{role.icon} {role.name}</Text>
-                        <Text style={{ color: '#00ffcc', fontSize: 12 }}>Seleccionar ➔</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-
-                  <TouchableOpacity 
-                    style={[styles.actionBtn, { backgroundColor: '#374151', marginTop: 10 }]} 
-                    onPress={() => setShowAdminSelectionModal(false)}
-                  >
-                    <Text style={{ color: '#fff', fontWeight: 'bold' }}>Cancelar</Text>
-                  </TouchableOpacity>
-                </>
-              ) : (
-                <>
-                  <Text style={styles.modalTitle}>
-                    🔐 Clave de Acceso: {adminRoles.find(r => r.id === targetRoleToLogin)?.name?.toUpperCase()}
-                  </Text>
-                  <Text style={styles.modalSub}>Introduce la contraseña asignada:</Text>
-                  
-                  <TextInput 
-                    style={styles.input} 
-                    placeholder="Contraseña" 
-                    placeholderTextColor="#666" 
-                    secureTextEntry 
-                    value={passwordInput} 
-                    onChangeText={setPasswordInput} 
-                    autoFocus
-                  />
-
-                  <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
-                    <TouchableOpacity 
-                      style={[styles.actionBtn, { backgroundColor: '#374151', flex: 1 }]} 
-                      onPress={() => setTargetRoleToLogin(null)}
-                    >
-                      <Text style={{ color: '#fff', fontWeight: 'bold' }}>⇦ Volver</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity 
-                      style={[styles.actionBtn, { flex: 1 }]} 
-                      onPress={handleAdminLogin}
-                    >
-                      <Text style={styles.actionBtnText}>Ingresar</Text>
-                    </TouchableOpacity>
-                  </View>
-                </>
-              )}
-
+              <Text style={styles.modalTitle}>Acceso administrativo</Text>
+              <Text style={styles.modalSub}>Ingresa con tu cuenta personal autorizada.</Text>
+              <TextInput style={styles.input} placeholder="Correo electrónico" placeholderTextColor="#8492a6" value={authEmail}
+                onChangeText={(value) => { setAuthEmail(value); setAuthError(''); }} keyboardType="email-address" autoCapitalize="none"
+                autoComplete="email" textContentType="emailAddress" autoFocus />
+              <TextInput style={styles.input} placeholder="Contraseña" placeholderTextColor="#8492a6" value={authPassword}
+                onChangeText={(value) => { setAuthPassword(value); setAuthError(''); }} secureTextEntry autoCapitalize="none"
+                autoComplete="password" textContentType="password" onSubmitEditing={handleAdminLogin} />
+              {!!authError && <Text style={styles.authErrorText}>{authError}</Text>}
+              <TouchableOpacity style={[styles.actionBtn, authLoading && { opacity: 0.6 }]} onPress={handleAdminLogin} disabled={authLoading}>
+                <Text style={styles.actionBtnText}>{authLoading ? 'Verificando acceso…' : 'Ingresar de forma segura'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.forgotPasswordBtn} onPress={async () => {
+                if (!authEmail.trim()) { setAuthError('Escribe tu correo para enviarte el enlace de recuperación.'); return; }
+                setAuthLoading(true);
+                const { error } = await supabase.auth.resetPasswordForEmail(authEmail.trim().toLowerCase(), { redirectTo: 'https://ipuc-lideres.vercel.app' });
+                setAuthLoading(false); setAuthError(error ? error.message : 'Si la cuenta existe, recibirás un enlace de recuperación.');
+              }} disabled={authLoading}>
+                <Text style={styles.forgotPasswordText}>¿Olvidaste tu contraseña?</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#26364b', marginTop: 8 }]}
+                onPress={() => { setShowAdminSelectionModal(false); setAuthError(''); setAuthPassword(''); }}>
+                <Text style={{ color: '#fff', fontWeight: '700' }}>Cerrar</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </Modal>
@@ -653,14 +834,61 @@ export default function App() {
     );
   }
 
-  const currentRoleObj = adminRoles.find(r => r.id === currentRole);
+  if (currentUser && currentProfile?.must_change_password) {
+    return (
+      <SafeAreaView style={styles.welcomeContainer}>
+        <View style={styles.welcomeCard}>
+          <Text style={styles.welcomeEmoji}>🔐</Text>
+          <Text style={styles.welcomeTitle}>Crea tu contraseña personal</Text>
+          <Text style={styles.welcomeSubtitle}>Por seguridad, debes reemplazar la contraseña temporal antes de ingresar a IPUC Líderes.</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Nueva contraseña (mínimo 12 caracteres)"
+            placeholderTextColor="#8492a6"
+            value={newPassword}
+            onChangeText={setNewPassword}
+            secureTextEntry
+            autoCapitalize="none"
+            autoComplete="new-password"
+            textContentType="newPassword"
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Confirma tu nueva contraseña"
+            placeholderTextColor="#8492a6"
+            value={confirmNewPassword}
+            onChangeText={setConfirmNewPassword}
+            secureTextEntry
+            autoCapitalize="none"
+            autoComplete="new-password"
+            textContentType="newPassword"
+            onSubmitEditing={handleFirstPasswordChange}
+          />
+          {!!passwordChangeError && <Text style={styles.authErrorText}>{passwordChangeError}</Text>}
+          <TouchableOpacity
+            style={[styles.actionBtn, passwordChangeLoading && { opacity: 0.6 }]}
+            onPress={handleFirstPasswordChange}
+            disabled={passwordChangeLoading}
+          >
+            <Text style={styles.actionBtnText}>{passwordChangeLoading ? 'Actualizando…' : 'Guardar contraseña y continuar'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.forgotPasswordBtn} onPress={handleSignOut}>
+            <Text style={styles.forgotPasswordText}>Cerrar sesión</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const roleLabels = { pastor: 'Pastor', secretario: 'Secretaría', tesorero: 'Tesorería', lideres: 'Líderes', general: 'Congregación' };
+  const currentRoleObj = currentRole ? { name: roleLabels[currentRole] || currentRole } : null;
 
   return (
     <SafeAreaView style={styles.container}>
       {!isProjectorMode && (
         <View style={styles.topBarContainer}>
           <View style={styles.roleSelectorWrapper}>
-            <TouchableOpacity style={styles.roleButtonActive} onPress={() => setCurrentRole(null)}>
+            <TouchableOpacity style={styles.roleButtonActive} onPress={handleSignOut}>
               <Text style={styles.roleButtonText}>
                 👤 {currentRoleObj ? currentRoleObj.name : userDisplayName} (Salir ⇦)
               </Text>
@@ -808,8 +1036,8 @@ export default function App() {
                       <View style={styles.switchRow}>
                         <Text style={styles.switchLabel}>¿Está en Transmisión En Vivo?</Text>
                         <Switch
-                          trackColor={{ false: '#374151', true: '#00ffcc' }}
-                          thumbColor={newSedeIsLive ? '#0b0f19' : '#9ca3af'}
+                          trackColor={{ false: '#344256', true: '#2dd4bf' }}
+                          thumbColor={newSedeIsLive ? '#0f172a' : '#9ca3af'}
                           onValueChange={setNewSedeIsLive}
                           value={newSedeIsLive}
                         />
@@ -840,7 +1068,7 @@ export default function App() {
               </View>
 
               {prayers.map(p => {
-                const isMyPrayer = (currentRole === 'general' || currentRole === 'lideres') && myLocalPrayerIds.includes(String(p.id));
+                const isMyPrayer = false;
                 const isEditingThis = editingPrayerId === p.id;
 
                 return (
@@ -858,7 +1086,7 @@ export default function App() {
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                         {(currentRole === 'pastor' || isMyPrayer) && !isEditingThis && (
                           <TouchableOpacity onPress={() => { setEditingPrayerId(p.id); setEditingPrayerText(p.request); }}>
-                            <Text style={{ color: '#00ffcc', fontWeight: 'bold', fontSize: 12 }}>✏️ Editar</Text>
+                            <Text style={{ color: '#2dd4bf', fontWeight: 'bold', fontSize: 12 }}>✏️ Editar</Text>
                           </TouchableOpacity>
                         )}
                         {(currentRole === 'pastor' || isMyPrayer) && (
@@ -879,7 +1107,7 @@ export default function App() {
                         />
                         <View style={{ flexDirection: 'row', gap: 8 }}>
                           <TouchableOpacity 
-                            style={[styles.actionBtn, { backgroundColor: '#374151', flex: 1, padding: 8 }]} 
+                            style={[styles.actionBtn, { backgroundColor: '#344256', flex: 1, padding: 8 }]} 
                             onPress={() => setEditingPrayerId(null)}
                           >
                             <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>Cancelar</Text>
@@ -888,7 +1116,7 @@ export default function App() {
                             style={[styles.actionBtn, { flex: 1, padding: 8 }]} 
                             onPress={() => handleSaveEditedPrayer(p.id)}
                           >
-                            <Text style={{ color: '#0b0f19', fontSize: 12, fontWeight: 'bold' }}>Guardar</Text>
+                            <Text style={{ color: '#0f172a', fontSize: 12, fontWeight: 'bold' }}>Guardar</Text>
                           </TouchableOpacity>
                         </View>
                       </View>
@@ -935,7 +1163,7 @@ export default function App() {
                             setShowComiteForm(true);
                           }}
                         >
-                          <Text style={{ color: '#00ffcc', fontWeight: 'bold' }}>✏️ Editar</Text>
+                          <Text style={{ color: '#2dd4bf', fontWeight: 'bold' }}>✏️ Editar</Text>
                         </TouchableOpacity>
                         <TouchableOpacity onPress={() => handleDeleteComite(comite.id)}>
                           <Text style={{ color: '#ff0055', fontWeight: 'bold' }}>✕ Eliminar</Text>
@@ -944,9 +1172,9 @@ export default function App() {
                     )}
                   </View>
 
-                  <View style={{ marginTop: 8, backgroundColor: '#1f2937', padding: 10, borderRadius: 8 }}>
-                    <Text style={styles.cardSub}>👤 <Text style={{ fontWeight: 'bold', color: '#00ffcc' }}>1. Líder:</Text> {comite.lider || 'No asignado'}</Text>
-                    <Text style={[styles.cardSub, { marginTop: 4 }]}>📝 <Text style={{ fontWeight: 'bold', color: '#00ffcc' }}>2. Secretario:</Text> {comite.secretario || 'No asignado'}</Text>
+                  <View style={{ marginTop: 8, backgroundColor: '#202d40', padding: 10, borderRadius: 8 }}>
+                    <Text style={styles.cardSub}>👤 <Text style={{ fontWeight: 'bold', color: '#2dd4bf' }}>1. Líder:</Text> {comite.lider || 'No asignado'}</Text>
+                    <Text style={[styles.cardSub, { marginTop: 4 }]}>📝 <Text style={{ fontWeight: 'bold', color: '#2dd4bf' }}>2. Secretario:</Text> {comite.secretario || 'No asignado'}</Text>
                   </View>
                 </View>
               ))}
@@ -983,7 +1211,7 @@ export default function App() {
               <Text style={styles.centeredSectionTitle}>Diezmos - Ofrendas y Donaciones</Text>
               
               {currentRole === 'secretario' && (
-                <View style={{ backgroundColor: '#1f2937', padding: 8, borderRadius: 8, marginBottom: 12, alignItems: 'center' }}>
+                <View style={{ backgroundColor: '#202d40', padding: 8, borderRadius: 8, marginBottom: 12, alignItems: 'center' }}>
                   <Text style={{ color: '#fbbf24', fontSize: 12 }}>👁️ Modo Solo Visualización (Secretaría)</Text>
                 </View>
               )}
@@ -999,7 +1227,7 @@ export default function App() {
                         </TouchableOpacity>
                       )}
                     </View>
-                    <Text style={[styles.metricValue, { color: item.color || '#00ffcc' }]}>{item.amount}</Text>
+                    <Text style={[styles.metricValue, { color: item.color || '#2dd4bf' }]}>{item.amount}</Text>
                   </View>
                 ))}
               </View>
@@ -1020,6 +1248,80 @@ export default function App() {
                   )}
                 </>
               )}
+            </ScrollView>
+          )}
+
+
+          {activeTab === 'leaders' && ['pastor', 'secretario'].includes(currentRole) && (
+            <ScrollView style={styles.content}>
+              <Text style={styles.sectionTitle}>📨 Gestión de líderes · 2026</Text>
+              <Text style={styles.cardSub}>Administración exclusiva de Secretaría y Pastor. Las invitaciones son individuales, vencen en 7 días y solo pueden usarse una vez.</Text>
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>1. Convocatoria</Text>
+                <TextInput style={styles.input} placeholder="Nombre de la convocatoria" placeholderTextColor="#8492a6" value={newCampaignTitle} onChangeText={setNewCampaignTitle} />
+                <TouchableOpacity style={styles.actionBtn} onPress={handleCreateLeaderCampaign} disabled={leadersLoading}><Text style={styles.actionBtnText}>Crear convocatoria 2026</Text></TouchableOpacity>
+                {leaderCampaigns.map(campaign => (
+                  <TouchableOpacity key={campaign.id} onPress={() => setActiveCampaignId(campaign.id)}
+                    style={{ padding: 10, marginTop: 8, borderRadius: 8, borderWidth: 1, borderColor: activeCampaignId === campaign.id ? '#2dd4bf' : '#344256', backgroundColor: '#202d40' }}>
+                    <Text style={{ color: activeCampaignId === campaign.id ? '#2dd4bf' : '#fff', fontWeight: '700' }}>{activeCampaignId === campaign.id ? '✓ ' : ''}{campaign.title}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>2. Registrar líder</Text>
+                <TextInput style={styles.input} placeholder="Nombre completo *" placeholderTextColor="#8492a6" value={newLeaderName} onChangeText={setNewLeaderName} />
+                <TextInput style={styles.input} placeholder="Correo electrónico *" placeholderTextColor="#8492a6" value={newLeaderEmail} onChangeText={setNewLeaderEmail} keyboardType="email-address" autoCapitalize="none" />
+                <TextInput style={styles.input} placeholder="Celular / WhatsApp (opcional)" placeholderTextColor="#8492a6" value={newLeaderPhone} onChangeText={setNewLeaderPhone} keyboardType="phone-pad" />
+                <TextInput style={styles.input} placeholder="Comité o área (opcional)" placeholderTextColor="#8492a6" value={newLeaderCommittee} onChangeText={setNewLeaderCommittee} />
+                <TouchableOpacity style={styles.actionBtn} onPress={handleSaveLeaderDirectory}><Text style={styles.actionBtnText}>Guardar en directorio 2026</Text></TouchableOpacity>
+              </View>
+              <View style={styles.card}>
+                <View style={styles.cardHeaderRow}>
+                  <Text style={styles.cardTitle}>3. Seleccionar destinatarios</Text>
+                  <Text style={{ color: '#9ca3af', fontSize: 11 }}>{selectedLeaderIds.length} seleccionados</Text>
+                </View>
+                {leadersList.length === 0 ? <Text style={styles.cardSub}>Aún no hay líderes registrados para 2026.</Text> : leadersList.map(person => (
+                  <TouchableOpacity key={person.id} onPress={() => toggleLeaderSelection(person.id)}
+                    style={{ padding: 12, marginTop: 8, borderRadius: 10, backgroundColor: selectedLeaderIds.includes(person.id) ? '#123b3a' : '#202d40', borderWidth: 1, borderColor: selectedLeaderIds.includes(person.id) ? '#2dd4bf' : '#344256' }}>
+                    <Text style={{ color: '#fff', fontWeight: '700' }}>{selectedLeaderIds.includes(person.id) ? '☑ ' : '☐ '}{person.full_name}</Text>
+                    <Text style={styles.cardSub}>{person.email}{person.committee ? ' · ' + person.committee : ''}</Text>
+                    {!!person.phone && <Text style={styles.cardSub}>{person.phone}</Text>}
+                  </TouchableOpacity>
+                ))}
+                <TouchableOpacity style={[styles.actionBtn, { marginTop: 14 }]} onPress={handleGenerateLeaderInvitations} disabled={leadersLoading || selectedLeaderIds.length === 0}>
+                  <Text style={styles.actionBtnText}>{leadersLoading ? 'Procesando…' : 'Generar invitaciones seleccionadas'}</Text>
+                </TouchableOpacity>
+              </View>
+              {generatedInviteLinks.length > 0 && (
+                <View style={styles.card}>
+                  <Text style={styles.cardTitle}>4. Enlaces listos para WhatsApp</Text>
+                  <Text style={styles.cardSub}>Pulsa cada botón para abrir el mensaje individual. Debes completar el envío en WhatsApp; la aplicación no afirma que el mensaje haya sido enviado o leído.</Text>
+                  {generatedInviteLinks.map(item => (
+                    <View key={item.personId} style={{ borderTopWidth: 1, borderColor: '#344256', paddingTop: 10, marginTop: 10 }}>
+                      <Text style={{ color: '#fff', fontWeight: '700' }}>{item.fullName}</Text>
+                      <Text style={styles.cardSub}>Vence: {new Date(item.expiresAt).toLocaleString('es-CO')}</Text>
+                      <TouchableOpacity style={styles.actionBtn} onPress={() => openLeaderWhatsApp(item.whatsappUrl)}><Text style={styles.actionBtnText}>Abrir WhatsApp para enviar</Text></TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              )}
+              <View style={styles.card}>
+                <View style={styles.cardHeaderRow}>
+                  <Text style={styles.cardTitle}>Estado de invitaciones</Text>
+                  <TouchableOpacity onPress={loadLeaderManagement}><Text style={{ color: '#2dd4bf', fontWeight: '700' }}>Actualizar</Text></TouchableOpacity>
+                </View>
+                {leaderInvitations.length === 0 ? <Text style={styles.cardSub}>Todavía no se han generado invitaciones.</Text> : leaderInvitations.map(item => {
+                  const expired = item.status === 'generated' && new Date(item.expires_at).getTime() <= Date.now();
+                  const status = expired ? 'Vencida' : item.status === 'accepted' ? 'Cuenta activada' : item.status === 'revoked' ? 'Reemplazada' : 'Generada · pendiente de envío';
+                  return (
+                    <View key={item.id} style={{ borderTopWidth: 1, borderColor: '#344256', paddingTop: 9, marginTop: 9 }}>
+                      <Text style={{ color: '#fff', fontWeight: '700' }}>{item.leader_directory?.full_name || item.email}</Text>
+                      <Text style={styles.cardSub}>{item.email} · {status}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+              {!!leadersMessage && <Text style={styles.cardSub}>{leadersMessage}</Text>}
             </ScrollView>
           )}
 
@@ -1152,7 +1454,7 @@ export default function App() {
                                       setShowEventForm(true);
                                     }}
                                   >
-                                    <Text style={{ color: '#00ffcc', fontWeight: 'bold' }}>✏️ Editar</Text>
+                                    <Text style={{ color: '#2dd4bf', fontWeight: 'bold' }}>✏️ Editar</Text>
                                   </TouchableOpacity>
                                   <TouchableOpacity onPress={() => handleDeleteEvent(ev.id)}>
                                     <Text style={{ color: '#ff0055', fontWeight: 'bold' }}>✕</Text>
@@ -1171,7 +1473,7 @@ export default function App() {
                     </ScrollView>
 
                     <TouchableOpacity 
-                      style={[styles.actionBtn, { backgroundColor: '#374151', marginTop: 10 }]} 
+                      style={[styles.actionBtn, { backgroundColor: '#344256', marginTop: 10 }]} 
                       onPress={() => setShowDayModal(false)}
                     >
                       <Text style={{ color: '#fff', fontWeight: 'bold' }}>Cerrar</Text>
@@ -1183,117 +1485,7 @@ export default function App() {
             </ScrollView>
           )}
 
-          {activeTab === 'users' && currentRole === 'pastor' && (
-            <ScrollView style={styles.content}>
-              <Text style={styles.sectionTitle}>🔐 Gestión de Accesos y Visibilidad</Text>
-              <Text style={styles.cardSub}>Activa el interruptor para hacer visible un perfil en el menú administrativo:</Text>
 
-              {adminRoles.map((role) => {
-                const isEditing = editingRoleId === role.id;
-
-                return (
-                  <View key={role.id} style={styles.card}>
-                    <View style={styles.cardHeaderRow}>
-                      <Text style={styles.cardTitle}>{role.icon} {role.name}</Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                        {!isEditing && (
-                          <TouchableOpacity onPress={() => {
-                            setEditingRoleId(role.id);
-                            setTempRoleName(role.name);
-                            setTempRoleKey(role.key);
-                          }}>
-                            <Text style={{ color: '#00ffcc', fontWeight: 'bold', fontSize: 12 }}>✏️ Modificar</Text>
-                          </TouchableOpacity>
-                        )}
-                        {role.id !== 'pastor' && (
-                          <TouchableOpacity onPress={() => handleDeleteAdminRole(role.id)}>
-                            <Text style={{ color: '#ff0055', fontWeight: 'bold', fontSize: 12 }}>✕</Text>
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                    </View>
-
-                    <View style={styles.switchRowInside}>
-                      <Text style={{ color: '#d1d5db', fontSize: 12 }}>Visible en menú administrativo:</Text>
-                      <Switch
-                        trackColor={{ false: '#374151', true: '#00ffcc' }}
-                        thumbColor={role.isVisible ? '#0b0f19' : '#9ca3af'}
-                        onValueChange={() => handleToggleRoleVisibility(role.id)}
-                        value={role.isVisible}
-                      />
-                    </View>
-
-                    {isEditing ? (
-                      <View style={{ marginTop: 8 }}>
-                        <TextInput 
-                          style={styles.input} 
-                          value={tempRoleName} 
-                          onChangeText={setTempRoleName} 
-                          placeholder="Nombre del perfil"
-                        />
-                        <TextInput 
-                          style={styles.input} 
-                          value={tempRoleKey} 
-                          onChangeText={setTempRoleKey} 
-                          placeholder="Clave de acceso"
-                        />
-                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
-                          <TouchableOpacity 
-                            style={[styles.actionBtn, { backgroundColor: '#374151', flex: 1, padding: 8 }]} 
-                            onPress={() => setEditingRoleId(null)}
-                          >
-                            <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>Cancelar</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity 
-                            style={[styles.actionBtn, { flex: 1, padding: 8 }]} 
-                            onPress={() => handleSaveSingleRole(role.id)}
-                          >
-                            <Text style={{ color: '#0b0f19', fontSize: 12, fontWeight: 'bold' }}>💾 Guardar</Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    ) : (
-                      <Text style={[styles.cardSub, { color: '#9ca3af', fontSize: 12 }]}>Clave: ••••</Text>
-                    )}
-                  </View>
-                );
-              })}
-
-              <TouchableOpacity 
-                style={styles.addSedeToggleBtn} 
-                onPress={() => setShowCreateNewRoleForm(!showCreateNewRoleForm)}
-              >
-                <Text style={styles.addSedeToggleText}>
-                  {showCreateNewRoleForm ? '❌ Cancelar' : '➕ Crear Nuevo Perfil de Líderes'}
-                </Text>
-              </TouchableOpacity>
-
-              {showCreateNewRoleForm && (
-                <View style={styles.addSedeCard}>
-                  <Text style={{ color: '#00ffcc', fontWeight: 'bold', marginBottom: 8 }}>Nuevo Perfil (Oculto por defecto)</Text>
-                  
-                  <TextInput 
-                    style={styles.input} 
-                    placeholder="Nombre (Ej. Líderes de Jóvenes)" 
-                    placeholderTextColor="#666" 
-                    value={newRoleName} 
-                    onChangeText={setNewRoleName} 
-                  />
-                  <TextInput 
-                    style={styles.input} 
-                    placeholder="Clave de acceso" 
-                    placeholderTextColor="#666" 
-                    value={newRoleKey} 
-                    onChangeText={setNewRoleKey} 
-                  />
-
-                  <TouchableOpacity style={styles.actionBtn} onPress={handleAddNewRole}>
-                    <Text style={styles.actionBtnText}>Crear Perfil</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </ScrollView>
-          )}
 
         </View>
       </View>
@@ -1302,65 +1494,68 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0b0f19' },
+  container: { flex: 1, backgroundColor: '#0f172a' },
   
-  welcomeContainer: { flex: 1, backgroundColor: '#0b0f19', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  welcomeCard: { backgroundColor: '#111827', width: '100%', maxWidth: 440, padding: 28, borderRadius: 20, borderWidth: 2, borderColor: '#00ffcc', alignItems: 'center', shadowColor: '#00ffcc', shadowOpacity: 0.25, shadowRadius: 15 },
-  welcomeEmoji: { fontSize: 44, marginBottom: 10 },
-  welcomeTitle: { fontSize: 24, fontWeight: 'bold', color: '#ffffff', marginBottom: 6, textAlign: 'center' },
-  welcomeSubtitle: { fontSize: 13, color: '#9ca3af', textAlign: 'center', marginBottom: 24 },
+  welcomeContainer: { flex: 1, backgroundColor: '#0f172a', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  welcomeCard: { backgroundColor: '#142235', width: '100%', maxWidth: 460, padding: 30, borderRadius: 24, borderWidth: 1, borderColor: '#31506a', alignItems: 'center', shadowColor: '#000000', shadowOpacity: 0.28, shadowRadius: 24, shadowOffset: { width: 0, height: 12 }, elevation: 10 },
+  welcomeEmoji: { fontSize: 46, marginBottom: 14 },
+  welcomeTitle: { fontSize: 28, fontWeight: '800', letterSpacing: 0.3, color: '#ffffff', marginBottom: 8, textAlign: 'center' },
+  welcomeSubtitle: { fontSize: 13, lineHeight: 20, color: '#aab8c8', textAlign: 'center', marginBottom: 26, maxWidth: 320 },
   
-  welcomePublicBtn: { backgroundColor: '#00ffcc', width: '100%', padding: 16, borderRadius: 14, alignItems: 'center', marginBottom: 14 },
-  welcomePublicBtnText: { color: '#0b0f19', fontSize: 15, fontWeight: 'bold' },
-  welcomePublicBtnSub: { color: '#0b0f19', fontSize: 11, fontWeight: '600', opacity: 0.8, marginTop: 2 },
+  welcomePublicBtn: { backgroundColor: '#2dd4bf', width: '100%', padding: 16, borderRadius: 14, alignItems: 'center', marginBottom: 14 },
+  welcomePublicBtnText: { color: '#0f172a', fontSize: 15, fontWeight: 'bold' },
+  welcomePublicBtnSub: { color: '#0f172a', fontSize: 11, fontWeight: '600', opacity: 0.8, marginTop: 2 },
   
-  welcomeAdminBtn: { backgroundColor: '#1f2937', width: '100%', padding: 16, borderRadius: 14, alignItems: 'center', borderWidth: 1.5, borderColor: '#374151' },
+  welcomeAdminBtn: { backgroundColor: '#202d40', width: '100%', padding: 16, borderRadius: 14, alignItems: 'center', borderWidth: 1.5, borderColor: '#344256' },
   welcomeAdminBtnText: { color: '#ffffff', fontSize: 15, fontWeight: 'bold' },
   welcomeAdminBtnSub: { color: '#9ca3af', fontSize: 11, fontWeight: '500', marginTop: 2 },
 
-  adminRoleBtnInside: { backgroundColor: '#1f2937', padding: 14, borderRadius: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1.5, borderColor: '#374151' },
+  adminRoleBtnInside: { backgroundColor: '#202d40', padding: 14, borderRadius: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1.5, borderColor: '#344256' },
   adminRoleTextInside: { color: '#ffffff', fontSize: 14, fontWeight: 'bold' },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  modalContent: { backgroundColor: '#111827', width: '100%', maxWidth: 360, padding: 22, borderRadius: 16, borderWidth: 2, borderColor: '#00ffcc' },
+  modalContent: { backgroundColor: '#142235', width: '100%', maxWidth: 390, padding: 24, borderRadius: 20, borderWidth: 1, borderColor: '#31506a' },
   modalTitle: { fontSize: 16, fontWeight: 'bold', color: '#ffffff', marginBottom: 6 },
-  modalSub: { fontSize: 12, color: '#9ca3af', marginBottom: 14 },
+  modalSub: { fontSize: 12, lineHeight: 18, color: '#aab8c8', marginBottom: 16 },
+  authErrorText: { color: '#fca5a5', fontSize: 12, lineHeight: 18, marginBottom: 10 },
+  forgotPasswordBtn: { alignItems: 'center', paddingVertical: 12 },
+  forgotPasswordText: { color: '#65d6c8', fontSize: 12, fontWeight: '700' },
 
-  topBarContainer: { flexDirection: 'row', backgroundColor: '#111827', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, height: 56, borderBottomWidth: 1, borderColor: '#1f2937', zIndex: 10 },
+  topBarContainer: { flexDirection: 'row', backgroundColor: '#172033', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, height: 56, borderBottomWidth: 1, borderColor: '#202d40', zIndex: 10 },
   roleSelectorWrapper: { marginRight: 6 },
-  roleButtonActive: { backgroundColor: '#1f2937', paddingHorizontal: 8, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#00ffcc' },
-  roleButtonText: { color: '#00ffcc', fontSize: 11, fontWeight: 'bold' },
+  roleButtonActive: { backgroundColor: '#202d40', paddingHorizontal: 8, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#2dd4bf' },
+  roleButtonText: { color: '#2dd4bf', fontSize: 11, fontWeight: 'bold' },
   
-  homeNavBtn: { backgroundColor: '#1f2937', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#374151', marginRight: 6 },
-  homeNavBtnText: { color: '#00ffcc', fontSize: 12, fontWeight: 'bold' },
+  homeNavBtn: { backgroundColor: '#202d40', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#344256', marginRight: 6 },
+  homeNavBtnText: { color: '#2dd4bf', fontSize: 12, fontWeight: 'bold' },
 
-  refreshBtn: { backgroundColor: '#1f2937', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#374151' },
-  refreshBtnText: { color: '#00ffcc', fontSize: 13, fontWeight: 'bold' },
+  refreshBtn: { backgroundColor: '#202d40', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#344256' },
+  refreshBtnText: { color: '#2dd4bf', fontSize: 13, fontWeight: 'bold' },
 
   mainWrapper: { flex: 1 },
   desktopWrapper: { maxWidth: 1024, alignSelf: 'center', width: '100%' },
   content: { flex: 1, padding: 16 },
 
-  dashboardWelcomeCard: { backgroundColor: '#111827', padding: 20, borderRadius: 16, marginBottom: 16, borderWidth: 1.5, borderColor: '#1f2937', alignItems: 'center' },
+  dashboardWelcomeCard: { backgroundColor: '#172033', padding: 20, borderRadius: 16, marginBottom: 16, borderWidth: 1.5, borderColor: '#202d40', alignItems: 'center' },
   dashboardWelcomeEmoji: { fontSize: 32, marginBottom: 6 },
   dashboardWelcomeTitle: { fontSize: 18, fontWeight: 'bold', color: '#ffffff', textAlign: 'center', marginBottom: 4 },
   dashboardWelcomeSub: { fontSize: 12, color: '#9ca3af', textAlign: 'center' },
   dashboardGrid: { gap: 12 },
   desktopDashboardGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
-  dashboardCard: { backgroundColor: '#111827', padding: 18, borderRadius: 16, marginBottom: 12, borderWidth: 1.5, borderColor: '#1f2937' },
+  dashboardCard: { backgroundColor: '#172033', padding: 18, borderRadius: 16, marginBottom: 12, borderWidth: 1.5, borderColor: '#202d40' },
   dashboardCardIcon: { fontSize: 26, marginBottom: 8 },
   dashboardCardTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 4 },
   dashboardCardSub: { fontSize: 12, color: '#9ca3af', marginBottom: 12, lineHeight: 16 },
-  dashboardCardArrow: { fontSize: 12, fontWeight: 'bold', color: '#00ffcc' },
+  dashboardCardArrow: { fontSize: 12, fontWeight: 'bold', color: '#2dd4bf' },
 
   sedesHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
   labelHeader: { fontSize: 12, fontWeight: 'bold', color: '#9ca3af' },
-  editSedeText: { fontSize: 12, fontWeight: 'bold', color: '#00ffcc' },
+  editSedeText: { fontSize: 12, fontWeight: 'bold', color: '#2dd4bf' },
   sedeChipWrapper: { flexDirection: 'row', alignItems: 'center', marginRight: 8 },
-  sedeChip: { backgroundColor: '#1f2937', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: '#374151' },
-  activeSedeChip: { backgroundColor: '#00ffcc', borderColor: '#00ffcc' },
+  sedeChip: { backgroundColor: '#202d40', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: '#344256' },
+  activeSedeChip: { backgroundColor: '#2dd4bf', borderColor: '#2dd4bf' },
   sedeChipText: { fontSize: 13, color: '#d1d5db' },
-  activeSedeChipText: { color: '#0b0f19', fontWeight: 'bold' },
+  activeSedeChipText: { color: '#0f172a', fontWeight: 'bold' },
   deleteBtn: { backgroundColor: '#ff0055', width: 18, height: 18, borderRadius: 9, justifyContent: 'center', alignItems: 'center', marginLeft: -6, marginTop: -10, zIndex: 2 },
   deleteBtnText: { color: '#ffffff', fontSize: 10, fontWeight: 'bold' },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
@@ -1368,63 +1563,63 @@ const styles = StyleSheet.create({
   centeredSectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#ffffff', textAlign: 'center', marginBottom: 12 },
   liveBadge: { backgroundColor: '#3f0d12', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: '#ff0055' },
   liveBadgeText: { color: '#ff3366', fontSize: 11, fontWeight: 'bold' },
-  offlineBadge: { backgroundColor: '#1f2937', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: '#374151' },
+  offlineBadge: { backgroundColor: '#202d40', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: '#344256' },
   offlineBadgeText: { color: '#9ca3af', fontSize: 11, fontWeight: 'bold' },
-  switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1f2937', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#374151', marginBottom: 12 },
-  switchRowInside: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1f2937', padding: 8, borderRadius: 8, marginVertical: 8 },
+  switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#202d40', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#344256', marginBottom: 12 },
+  switchRowInside: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#202d40', padding: 8, borderRadius: 8, marginVertical: 8 },
   switchLabel: { color: '#ffffff', fontSize: 13, fontWeight: '600' },
-  videoContainer: { height: 200, borderRadius: 16, overflow: 'hidden', marginBottom: 12, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: '#1f2937' },
+  videoContainer: { height: 200, borderRadius: 16, overflow: 'hidden', marginBottom: 12, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: '#202d40' },
   desktopVideoContainer: { height: 380 },
   fullScreenProjectorContainer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, height: '100vh', zIndex: 9999, borderRadius: 0, borderWidth: 0 },
-  projectorToggleBtn: { backgroundColor: '#1f2937', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: '#00ffcc' },
-  projectorToggleText: { color: '#00ffcc', fontSize: 11, fontWeight: 'bold' },
+  projectorToggleBtn: { backgroundColor: '#202d40', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: '#2dd4bf' },
+  projectorToggleText: { color: '#2dd4bf', fontSize: 11, fontWeight: 'bold' },
   exitProjectorBtn: { position: 'absolute', top: 20, right: 20, backgroundColor: 'rgba(255, 0, 85, 0.85)', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, zIndex: 10000 },
   exitProjectorText: { color: '#fff', fontWeight: 'bold', fontSize: 12 },
   emptyVideoBox: { padding: 20, alignItems: 'center', justifyContent: 'center' },
   emptyVideoText: { color: '#ffffff', fontSize: 13, fontWeight: 'bold', textAlign: 'center' },
-  addSedeToggleBtn: { borderStyle: 'dashed', borderWidth: 2, borderColor: '#00ffcc', padding: 12, borderRadius: 12, alignItems: 'center', marginBottom: 12, backgroundColor: '#111827' },
-  addSedeToggleText: { color: '#00ffcc', fontWeight: 'bold', fontSize: 13 },
-  addSedeCard: { backgroundColor: '#111827', padding: 16, borderRadius: 14, marginBottom: 12, borderWidth: 2, borderColor: '#00ffcc' },
-  card: { backgroundColor: '#111827', padding: 16, borderRadius: 14, marginBottom: 10, borderWidth: 1, borderColor: '#1f2937' },
-  answeredCard: { borderColor: '#00ffcc', backgroundColor: '#0b1f1a' },
+  addSedeToggleBtn: { borderStyle: 'dashed', borderWidth: 2, borderColor: '#2dd4bf', padding: 12, borderRadius: 12, alignItems: 'center', marginBottom: 12, backgroundColor: '#172033' },
+  addSedeToggleText: { color: '#2dd4bf', fontWeight: 'bold', fontSize: 13 },
+  addSedeCard: { backgroundColor: '#172033', padding: 16, borderRadius: 14, marginBottom: 12, borderWidth: 2, borderColor: '#2dd4bf' },
+  card: { backgroundColor: '#172033', padding: 16, borderRadius: 14, marginBottom: 10, borderWidth: 1, borderColor: '#202d40' },
+  answeredCard: { borderColor: '#2dd4bf', backgroundColor: '#0b1f1a' },
   cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   cardTitle: { fontSize: 15, fontWeight: 'bold', color: '#ffffff', marginRight: 8 },
   cardSub: { fontSize: 13, color: '#d1d5db', marginTop: 4, lineHeight: 18 },
-  input: { backgroundColor: '#1f2937', padding: 12, borderRadius: 10, borderWidth: 1.5, borderColor: '#374151', marginBottom: 8, color: '#ffffff', fontSize: 14 },
-  actionBtn: { backgroundColor: '#00ffcc', padding: 14, borderRadius: 12, alignItems: 'center', marginTop: 4 },
-  actionBtnText: { color: '#0b0f19', fontWeight: 'bold', fontSize: 14 },
+  input: { backgroundColor: '#202d40', padding: 12, borderRadius: 10, borderWidth: 1.5, borderColor: '#344256', marginBottom: 8, color: '#ffffff', fontSize: 14 },
+  actionBtn: { backgroundColor: '#2dd4bf', padding: 14, borderRadius: 12, alignItems: 'center', marginTop: 4 },
+  actionBtnText: { color: '#0f172a', fontWeight: 'bold', fontSize: 14 },
   metricContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 10 },
-  metricCard: { width: '48%', backgroundColor: '#111827', padding: 14, borderRadius: 14, borderWidth: 1.5, borderColor: '#1f2937', marginBottom: 10 },
+  metricCard: { width: '48%', backgroundColor: '#172033', padding: 14, borderRadius: 14, borderWidth: 1.5, borderColor: '#202d40', marginBottom: 10 },
   metricLabel: { fontSize: 12, color: '#9ca3af', fontWeight: '600' },
   metricValue: { fontSize: 18, fontWeight: 'bold', marginTop: 4 },
   
   monthSelectorRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
-  monthTabBtn: { flex: 1, backgroundColor: '#1f2937', padding: 10, borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: '#374151' },
-  activeMonthTab: { backgroundColor: '#00ffcc', borderColor: '#00ffcc' },
+  monthTabBtn: { flex: 1, backgroundColor: '#202d40', padding: 10, borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: '#344256' },
+  activeMonthTab: { backgroundColor: '#2dd4bf', borderColor: '#2dd4bf' },
   monthTabText: { color: '#d1d5db', fontWeight: 'bold', fontSize: 13 },
-  activeMonthTabText: { color: '#0b0f19' },
+  activeMonthTabText: { color: '#0f172a' },
 
   // Estilos avanzados para el nuevo Calendario en Cuadrícula Mensual
-  calendarContainerCard: { backgroundColor: '#111827', borderRadius: 16, padding: 12, borderWidth: 1.5, borderColor: '#1f2937' },
-  weekDaysHeaderRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 8, paddingBottom: 6, borderBottomWidth: 1, borderColor: '#374151' },
+  calendarContainerCard: { backgroundColor: '#172033', borderRadius: 16, padding: 12, borderWidth: 1.5, borderColor: '#202d40' },
+  weekDaysHeaderRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 8, paddingBottom: 6, borderBottomWidth: 1, borderColor: '#344256' },
   weekDayLabel: { color: '#9ca3af', fontSize: 12, fontWeight: 'bold', width: '14%', textAlign: 'center' },
   calendarWeekRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 6 },
   calendarCellEmpty: { width: '14%', aspectRatio: 1 },
-  calendarCell: { width: '14%', aspectRatio: 1, backgroundColor: '#1f2937', justifyContent: 'center', alignItems: 'center', borderRadius: 8, borderWidth: 1, borderColor: '#374151' },
-  cellWithEvent: { borderColor: '#00ffcc', backgroundColor: '#0b1f1a' },
-  cellSelected: { backgroundColor: '#00ffcc', borderColor: '#00ffcc' },
+  calendarCell: { width: '14%', aspectRatio: 1, backgroundColor: '#202d40', justifyContent: 'center', alignItems: 'center', borderRadius: 8, borderWidth: 1, borderColor: '#344256' },
+  cellWithEvent: { borderColor: '#2dd4bf', backgroundColor: '#0b1f1a' },
+  cellSelected: { backgroundColor: '#2dd4bf', borderColor: '#2dd4bf' },
   cellDayNumber: { color: '#ffffff', fontSize: 13, fontWeight: 'bold' },
-  cellDayNumberSelected: { color: '#0b0f19' },
+  cellDayNumberSelected: { color: '#0f172a' },
   cellEventIndicator: { position: 'absolute', bottom: 2, right: 2, backgroundColor: '#ff0055', width: 14, height: 14, borderRadius: 7, justifyContent: 'center', alignItems: 'center' },
   cellEventIndicatorText: { color: '#ffffff', fontSize: 9, fontWeight: 'bold' },
 
-  activePrayerBadge: { backgroundColor: '#374151', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
+  activePrayerBadge: { backgroundColor: '#344256', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
   activePrayerBadgeText: { color: '#fbbf24', fontSize: 10, fontWeight: 'bold' },
   answeredBadge: { backgroundColor: '#064e3b', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
   answeredBadgeText: { color: '#34d399', fontSize: 10, fontWeight: 'bold' },
-  prayerActionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingTop: 8, borderTopWidth: 1, borderColor: '#1f2937' },
-  supportBtn: { backgroundColor: '#1f2937', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#374151' },
-  supportBtnText: { color: '#00ffcc', fontSize: 12, fontWeight: 'bold' },
+  prayerActionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingTop: 8, borderTopWidth: 1, borderColor: '#202d40' },
+  supportBtn: { backgroundColor: '#202d40', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#344256' },
+  supportBtnText: { color: '#2dd4bf', fontSize: 12, fontWeight: 'bold' },
   statusToggleBtn: { paddingHorizontal: 8, paddingVertical: 6 },
   statusToggleText: { color: '#9ca3af', fontSize: 12, fontWeight: '600' }
 });
