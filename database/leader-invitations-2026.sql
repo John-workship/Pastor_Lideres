@@ -83,6 +83,10 @@ begin
   select * into v_person from public.leader_directory
     where id=p_person_id and active=true;
   if not found then raise exception 'Leader not found or inactive'; end if;
+  if exists (
+    select 1 from auth.users u join public.profiles p on p.id=u.id
+    where lower(u.email)=lower(trim(v_person.email)) and p.role<>'pending'
+  ) then raise exception 'This email already has an active account'; end if;
   if p_campaign_id is not null and not exists (
     select 1 from public.leader_campaigns c
     where c.id=p_campaign_id and c.period_year=v_person.period_year
@@ -129,8 +133,8 @@ begin
         display_name=coalesce(nullif(trim(p_full_name),''),display_name),
         must_change_password=false,
         updated_at=now()
-    where id=p_user_id;
-  if not found then raise exception 'User profile not found'; end if;
+    where id=p_user_id and role='pending';
+  if not found then raise exception 'Only pending profiles can accept a leader invitation'; end if;
   update public.leader_invitations
     set status='accepted',accepted_user_id=p_user_id,accepted_at=now()
     where id=v_invitation.id;
