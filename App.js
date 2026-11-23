@@ -24,6 +24,10 @@ if (Platform.OS !== 'web') {
   WebView = require('react-native-webview').WebView;
 }
 
+const monthKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+const dateKey = (date) => `${monthKey(date)}-${String(date.getDate()).padStart(2, '0')}`;
+const formatMonthLabel = (date) => date.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' }).toUpperCase();
+
 export default function App() {
   const [currentRole, setCurrentRole] = useState(null);
   
@@ -69,13 +73,13 @@ export default function App() {
   const getRoleDashboardItems = () => {
     if (currentRole === 'general') {
       return [
-        { key: 'live', title: 'Transmisión en Vivo', subtitle: 'Sigue el culto y la palabra en directo', icon: '📺', color: '#00ffcc' },
+        { key: 'live', title: 'Transmisión en Vivo', subtitle: 'Sigue el culto y la palabra en directo', icon: '📺', color: '#2dd4bf' },
         { key: 'prayers', title: 'Red de Oración', subtitle: 'Publica y únete a peticiones de la hermandad', icon: '🙏', color: '#34d399' }
       ];
     }
     if (currentRole === 'tesorero') {
       return [
-        { key: 'finance', title: 'Tesorería y Fondos', subtitle: 'Control de diezmos, ofrendas y finanzas', icon: '💰', color: '#00ffcc' },
+        { key: 'finance', title: 'Tesorería y Fondos', subtitle: 'Control de diezmos, ofrendas y finanzas', icon: '💰', color: '#2dd4bf' },
         { key: 'live', title: 'Transmisión en Vivo', subtitle: 'Visualiza la señal del culto actual', icon: '📺', color: '#34d399' },
         { key: 'comites', title: 'Comités de Trabajo', subtitle: 'Listado de comités de la iglesia', icon: '👥', color: '#fbbf24' },
         { key: 'services', title: 'Calendario de Cultos', subtitle: 'Consulta los eventos programados', icon: '📋', color: '#a78bfa' }
@@ -83,7 +87,7 @@ export default function App() {
     }
     if (currentRole === 'secretario') {
       return [
-        { key: 'live', title: 'Transmisión en Vivo', subtitle: 'Monitorea la señal del culto', icon: '📺', color: '#00ffcc' },
+        { key: 'live', title: 'Transmisión en Vivo', subtitle: 'Monitorea la señal del culto', icon: '📺', color: '#2dd4bf' },
         { key: 'comites', title: 'Comités de Trabajo', subtitle: 'Gestiona líderes y secretarios de comités', icon: '👥', color: '#34d399' },
         { key: 'services', title: 'Calendario de Cultos', subtitle: 'Programa y organiza los eventos y cultos', icon: '📋', color: '#fbbf24' },
         { key: 'finance', title: 'Tesorería (Visualización)', subtitle: 'Consulta los fondos y reportes financieros', icon: '💰', color: '#a78bfa' }
@@ -91,14 +95,14 @@ export default function App() {
     }
     if (currentRole === 'lideres' || (!['pastor', 'secretario', 'tesorero', 'general'].includes(currentRole) && currentRole !== null)) {
       return [
-        { key: 'live', title: 'Transmisión en Vivo', subtitle: 'Sigue el culto en directo', icon: '📺', color: '#00ffcc' },
+        { key: 'live', title: 'Transmisión en Vivo', subtitle: 'Sigue el culto en directo', icon: '📺', color: '#2dd4bf' },
         { key: 'comites', title: 'Comités de Trabajo', subtitle: 'Consulta los comités y líderes de área', icon: '👥', color: '#fbbf24' },
         { key: 'prayers', title: 'Red de Oración', subtitle: 'Visualiza y participa en peticiones', icon: '🙏', color: '#34d399' },
         { key: 'services', title: 'Calendario de Cultos', subtitle: 'Consulta la agenda y eventos programados', icon: '📋', color: '#a78bfa' }
       ];
     }
     return [
-      { key: 'live', title: 'Transmisión en Vivo', subtitle: 'Administra sedes y el reproductor en directo', icon: '📺', color: '#00ffcc' },
+      { key: 'live', title: 'Transmisión en Vivo', subtitle: 'Administra sedes y el reproductor en directo', icon: '📺', color: '#2dd4bf' },
       { key: 'prayers', title: 'Red de Oración', subtitle: 'Gestiona peticiones y marca respondidas', icon: '🙏', color: '#34d399' },
       { key: 'comites', title: 'Comités de Trabajo', subtitle: 'Organiza líderes, comités y secretarios', icon: '👥', color: '#fbbf24' },
       { key: 'finance', title: 'Tesorería y Fondos', subtitle: 'Administra fondos, ofrendas y cuentas', icon: '💰', color: '#a78bfa' },
@@ -140,13 +144,17 @@ export default function App() {
   const [newFinanceLabel, setNewFinanceLabel] = useState('');
   const [newFinanceAmount, setNewFinanceAmount] = useState('');
 
-  // Meses visibles
-  const [activeMonths, setActiveMonths] = useState([
-    { id: '2026-11', name: 'NOVIEMBRE 2026' },
-    { id: '2026-12', name: 'DICIEMBRE 2026' }
-  ]);
-  const [currentMonth, setCurrentMonth] = useState('2026-11');
-  const [selectedDay, setSelectedDay] = useState('2026-11-05');
+  // Meses visibles: siempre comienzan en el mes local actual y el siguiente.
+  const [activeMonths, setActiveMonths] = useState(() => {
+    const today = new Date();
+    const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+    return [
+      { id: monthKey(today), name: formatMonthLabel(today) },
+      { id: monthKey(nextMonth), name: formatMonthLabel(nextMonth) }
+    ];
+  });
+  const [currentMonth, setCurrentMonth] = useState(() => monthKey(new Date()));
+  const [selectedDay, setSelectedDay] = useState(() => dateKey(new Date()));
   const [showDayModal, setShowDayModal] = useState(false);
 
   const [eventsList, setEventsList] = useState([]);
@@ -156,71 +164,54 @@ export default function App() {
   const [newEventTime, setNewEventTime] = useState('');
   const [newEventDetails, setNewEventDetails] = useState('');
 
-  const checkAndRotateMonths = async () => {
-    try {
-      const { data: eventsData } = await supabase.from('events').select('*');
-      if (eventsData && eventsData.length > 0) {
-        const uniqueMonthsInDb = [...new Set(eventsData.map(e => e.date.substring(0, 7)))].sort();
-        if (uniqueMonthsInDb.length > 2) {
-          const oldestMonth = uniqueMonthsInDb[0];
-          await supabase.from('events').delete().like('date', `${oldestMonth}%`);
-        }
-      }
-    } catch (err) {
-      console.log('Error al rotar meses en la base de datos:', err);
-    }
-  };
-
   const fetchData = async () => {
     setRefreshing(true);
     try {
-      await checkAndRotateMonths();
+      const results = await Promise.all([
+        supabase.from('sedes').select('*'),
+        supabase.from('prayers').select('*').order('id', { ascending: false }),
+        supabase.from('comites').select('*'),
+        supabase.from('finance').select('*'),
+        supabase.from('events').select('*').order('date', { ascending: true })
+      ]);
 
-      const { data: sedesData } = await supabase.from('sedes').select('*');
-      if (sedesData && sedesData.length > 0) {
-        const formatted = sedesData.map(s => ({ ...s, id: String(s.id) }));
-        setSedesList(formatted);
-        setSelectedSede(prev => formatted.find(s => s.id === String(prev?.id)) || formatted[0]);
-      }
+      const labels = ['sedes', 'prayers', 'comites', 'finance', 'events'];
+      results.forEach((result, index) => {
+        if (result.error) throw new Error(`Error cargando ${labels[index]}: ${result.error.message}`);
+      });
 
-      const { data: prayersData } = await supabase.from('prayers').select('*').order('id', { ascending: false });
-      if (prayersData && prayersData.length > 0) {
-        setPrayers(prayersData.map(p => ({
-          ...p,
-          status: p.status || 'active',
-          count: p.count !== undefined ? p.count : 0
-        })));
-      }
+      const [sedesResult, prayersResult, comitesResult, financeResult, eventsResult] = results;
+      const sedesData = sedesResult.data || [];
+      const prayersData = prayersResult.data || [];
+      const comitesData = comitesResult.data || [];
+      const financeData = financeResult.data || [];
+      const eventsData = eventsResult.data || [];
 
-      const { data: comitesData } = await supabase.from('comites').select('*');
-      if (comitesData && comitesData.length > 0) {
-        setComitesList(comitesData.map(c => ({
-          ...c,
-          id: String(c.id),
-          lider: c.lider || '',
-          secretario: c.secretario || ''
-        })));
-      }
+      const formattedSedes = sedesData.map(s => ({ ...s, id: String(s.id) }));
+      setSedesList(formattedSedes);
+      setSelectedSede(prev => formattedSedes.find(s => s.id === String(prev?.id)) || formattedSedes[0] || null);
 
-      const { data: financeData } = await supabase.from('finance').select('*');
-      if (financeData && financeData.length > 0) setFinanceList(financeData);
+      setPrayers(prayersData.map(p => ({
+        ...p,
+        status: p.status || 'active',
+        count: p.count !== undefined ? p.count : 0
+      })));
 
-      const { data: eventsData } = await supabase.from('events').select('*');
-      if (eventsData && eventsData.length > 0) {
-        setEventsList(eventsData);
-        const activeDates = [...new Set(eventsData.map(e => e.date.substring(0, 7)))].sort();
-        if (activeDates.length >= 2) {
-          setActiveMonths([
-            { id: activeDates[0], name: formatMonthName(activeDates[0]) },
-            { id: activeDates[1], name: formatMonthName(activeDates[1]) }
-          ]);
-        }
-      }
+      setComitesList(comitesData.map(c => ({
+        ...c,
+        id: String(c.id),
+        lider: c.lider || '',
+        secretario: c.secretario || ''
+      })));
 
+      setFinanceList(financeData);
+      setEventsList(eventsData);
     } catch (err) {
-      console.log('Error de sincronización:', err);
+      console.error('Error de sincronización:', err);
+      alert('No fue posible sincronizar toda la información. Verifica tu conexión e inténtalo de nuevo.');
+    } finally {
+      setRefreshing(false);
     }
-    setRefreshing(false);
   };
 
   const formatMonthName = (yearMonthStr) => {
@@ -434,7 +425,7 @@ export default function App() {
       id: editingFinanceId ? String(editingFinanceId) : String(Date.now()),
       label: newFinanceLabel.trim() || 'Fondo',
       amount: newFinanceAmount.trim() || '$ 0.00',
-      color: '#00ffcc'
+      color: '#2dd4bf'
     };
     setFinanceList(prev => editingFinanceId ? prev.map(f => f.id === payload.id ? payload : f) : [...prev, payload]);
     await supabase.from('finance').upsert([payload]);
@@ -520,7 +511,7 @@ export default function App() {
       <SafeAreaView style={styles.welcomeContainer}>
         <View style={styles.welcomeCard}>
           <Text style={styles.welcomeEmoji}>🏛️</Text>
-          <Text style={styles.welcomeTitle}>Portal Congregacional</Text>
+          <Text style={styles.welcomeTitle}>IPUC Líderes</Text>
           <Text style={styles.welcomeSubtitle}>Selecciona tu modo de ingreso para continuar</Text>
 
           <TouchableOpacity 
@@ -565,7 +556,7 @@ export default function App() {
 
               <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
                 <TouchableOpacity 
-                  style={[styles.actionBtn, { backgroundColor: '#374151', flex: 1 }]} 
+                  style={[styles.actionBtn, { backgroundColor: '#344256', flex: 1 }]} 
                   onPress={() => setShowGeneralModal(false)}
                 >
                   <Text style={{ color: '#fff', fontWeight: 'bold' }}>Cancelar</Text>
@@ -599,13 +590,13 @@ export default function App() {
                         onPress={() => { setTargetRoleToLogin(role.id); setPasswordInput(''); }}
                       >
                         <Text style={styles.adminRoleTextInside}>{role.icon} {role.name}</Text>
-                        <Text style={{ color: '#00ffcc', fontSize: 12 }}>Seleccionar ➔</Text>
+                        <Text style={{ color: '#2dd4bf', fontSize: 12 }}>Seleccionar ➔</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
 
                   <TouchableOpacity 
-                    style={[styles.actionBtn, { backgroundColor: '#374151', marginTop: 10 }]} 
+                    style={[styles.actionBtn, { backgroundColor: '#344256', marginTop: 10 }]} 
                     onPress={() => setShowAdminSelectionModal(false)}
                   >
                     <Text style={{ color: '#fff', fontWeight: 'bold' }}>Cancelar</Text>
@@ -630,7 +621,7 @@ export default function App() {
 
                   <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
                     <TouchableOpacity 
-                      style={[styles.actionBtn, { backgroundColor: '#374151', flex: 1 }]} 
+                      style={[styles.actionBtn, { backgroundColor: '#344256', flex: 1 }]} 
                       onPress={() => setTargetRoleToLogin(null)}
                     >
                       <Text style={{ color: '#fff', fontWeight: 'bold' }}>⇦ Volver</Text>
@@ -808,8 +799,8 @@ export default function App() {
                       <View style={styles.switchRow}>
                         <Text style={styles.switchLabel}>¿Está en Transmisión En Vivo?</Text>
                         <Switch
-                          trackColor={{ false: '#374151', true: '#00ffcc' }}
-                          thumbColor={newSedeIsLive ? '#0b0f19' : '#9ca3af'}
+                          trackColor={{ false: '#344256', true: '#2dd4bf' }}
+                          thumbColor={newSedeIsLive ? '#0f172a' : '#9ca3af'}
                           onValueChange={setNewSedeIsLive}
                           value={newSedeIsLive}
                         />
@@ -858,7 +849,7 @@ export default function App() {
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                         {(currentRole === 'pastor' || isMyPrayer) && !isEditingThis && (
                           <TouchableOpacity onPress={() => { setEditingPrayerId(p.id); setEditingPrayerText(p.request); }}>
-                            <Text style={{ color: '#00ffcc', fontWeight: 'bold', fontSize: 12 }}>✏️ Editar</Text>
+                            <Text style={{ color: '#2dd4bf', fontWeight: 'bold', fontSize: 12 }}>✏️ Editar</Text>
                           </TouchableOpacity>
                         )}
                         {(currentRole === 'pastor' || isMyPrayer) && (
@@ -879,7 +870,7 @@ export default function App() {
                         />
                         <View style={{ flexDirection: 'row', gap: 8 }}>
                           <TouchableOpacity 
-                            style={[styles.actionBtn, { backgroundColor: '#374151', flex: 1, padding: 8 }]} 
+                            style={[styles.actionBtn, { backgroundColor: '#344256', flex: 1, padding: 8 }]} 
                             onPress={() => setEditingPrayerId(null)}
                           >
                             <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>Cancelar</Text>
@@ -888,7 +879,7 @@ export default function App() {
                             style={[styles.actionBtn, { flex: 1, padding: 8 }]} 
                             onPress={() => handleSaveEditedPrayer(p.id)}
                           >
-                            <Text style={{ color: '#0b0f19', fontSize: 12, fontWeight: 'bold' }}>Guardar</Text>
+                            <Text style={{ color: '#0f172a', fontSize: 12, fontWeight: 'bold' }}>Guardar</Text>
                           </TouchableOpacity>
                         </View>
                       </View>
@@ -935,7 +926,7 @@ export default function App() {
                             setShowComiteForm(true);
                           }}
                         >
-                          <Text style={{ color: '#00ffcc', fontWeight: 'bold' }}>✏️ Editar</Text>
+                          <Text style={{ color: '#2dd4bf', fontWeight: 'bold' }}>✏️ Editar</Text>
                         </TouchableOpacity>
                         <TouchableOpacity onPress={() => handleDeleteComite(comite.id)}>
                           <Text style={{ color: '#ff0055', fontWeight: 'bold' }}>✕ Eliminar</Text>
@@ -944,9 +935,9 @@ export default function App() {
                     )}
                   </View>
 
-                  <View style={{ marginTop: 8, backgroundColor: '#1f2937', padding: 10, borderRadius: 8 }}>
-                    <Text style={styles.cardSub}>👤 <Text style={{ fontWeight: 'bold', color: '#00ffcc' }}>1. Líder:</Text> {comite.lider || 'No asignado'}</Text>
-                    <Text style={[styles.cardSub, { marginTop: 4 }]}>📝 <Text style={{ fontWeight: 'bold', color: '#00ffcc' }}>2. Secretario:</Text> {comite.secretario || 'No asignado'}</Text>
+                  <View style={{ marginTop: 8, backgroundColor: '#202d40', padding: 10, borderRadius: 8 }}>
+                    <Text style={styles.cardSub}>👤 <Text style={{ fontWeight: 'bold', color: '#2dd4bf' }}>1. Líder:</Text> {comite.lider || 'No asignado'}</Text>
+                    <Text style={[styles.cardSub, { marginTop: 4 }]}>📝 <Text style={{ fontWeight: 'bold', color: '#2dd4bf' }}>2. Secretario:</Text> {comite.secretario || 'No asignado'}</Text>
                   </View>
                 </View>
               ))}
@@ -983,7 +974,7 @@ export default function App() {
               <Text style={styles.centeredSectionTitle}>Diezmos - Ofrendas y Donaciones</Text>
               
               {currentRole === 'secretario' && (
-                <View style={{ backgroundColor: '#1f2937', padding: 8, borderRadius: 8, marginBottom: 12, alignItems: 'center' }}>
+                <View style={{ backgroundColor: '#202d40', padding: 8, borderRadius: 8, marginBottom: 12, alignItems: 'center' }}>
                   <Text style={{ color: '#fbbf24', fontSize: 12 }}>👁️ Modo Solo Visualización (Secretaría)</Text>
                 </View>
               )}
@@ -999,7 +990,7 @@ export default function App() {
                         </TouchableOpacity>
                       )}
                     </View>
-                    <Text style={[styles.metricValue, { color: item.color || '#00ffcc' }]}>{item.amount}</Text>
+                    <Text style={[styles.metricValue, { color: item.color || '#2dd4bf' }]}>{item.amount}</Text>
                   </View>
                 ))}
               </View>
@@ -1152,7 +1143,7 @@ export default function App() {
                                       setShowEventForm(true);
                                     }}
                                   >
-                                    <Text style={{ color: '#00ffcc', fontWeight: 'bold' }}>✏️ Editar</Text>
+                                    <Text style={{ color: '#2dd4bf', fontWeight: 'bold' }}>✏️ Editar</Text>
                                   </TouchableOpacity>
                                   <TouchableOpacity onPress={() => handleDeleteEvent(ev.id)}>
                                     <Text style={{ color: '#ff0055', fontWeight: 'bold' }}>✕</Text>
@@ -1171,7 +1162,7 @@ export default function App() {
                     </ScrollView>
 
                     <TouchableOpacity 
-                      style={[styles.actionBtn, { backgroundColor: '#374151', marginTop: 10 }]} 
+                      style={[styles.actionBtn, { backgroundColor: '#344256', marginTop: 10 }]} 
                       onPress={() => setShowDayModal(false)}
                     >
                       <Text style={{ color: '#fff', fontWeight: 'bold' }}>Cerrar</Text>
@@ -1202,7 +1193,7 @@ export default function App() {
                             setTempRoleName(role.name);
                             setTempRoleKey(role.key);
                           }}>
-                            <Text style={{ color: '#00ffcc', fontWeight: 'bold', fontSize: 12 }}>✏️ Modificar</Text>
+                            <Text style={{ color: '#2dd4bf', fontWeight: 'bold', fontSize: 12 }}>✏️ Modificar</Text>
                           </TouchableOpacity>
                         )}
                         {role.id !== 'pastor' && (
@@ -1216,8 +1207,8 @@ export default function App() {
                     <View style={styles.switchRowInside}>
                       <Text style={{ color: '#d1d5db', fontSize: 12 }}>Visible en menú administrativo:</Text>
                       <Switch
-                        trackColor={{ false: '#374151', true: '#00ffcc' }}
-                        thumbColor={role.isVisible ? '#0b0f19' : '#9ca3af'}
+                        trackColor={{ false: '#344256', true: '#2dd4bf' }}
+                        thumbColor={role.isVisible ? '#0f172a' : '#9ca3af'}
                         onValueChange={() => handleToggleRoleVisibility(role.id)}
                         value={role.isVisible}
                       />
@@ -1239,7 +1230,7 @@ export default function App() {
                         />
                         <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
                           <TouchableOpacity 
-                            style={[styles.actionBtn, { backgroundColor: '#374151', flex: 1, padding: 8 }]} 
+                            style={[styles.actionBtn, { backgroundColor: '#344256', flex: 1, padding: 8 }]} 
                             onPress={() => setEditingRoleId(null)}
                           >
                             <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>Cancelar</Text>
@@ -1248,7 +1239,7 @@ export default function App() {
                             style={[styles.actionBtn, { flex: 1, padding: 8 }]} 
                             onPress={() => handleSaveSingleRole(role.id)}
                           >
-                            <Text style={{ color: '#0b0f19', fontSize: 12, fontWeight: 'bold' }}>💾 Guardar</Text>
+                            <Text style={{ color: '#0f172a', fontSize: 12, fontWeight: 'bold' }}>💾 Guardar</Text>
                           </TouchableOpacity>
                         </View>
                       </View>
@@ -1270,7 +1261,7 @@ export default function App() {
 
               {showCreateNewRoleForm && (
                 <View style={styles.addSedeCard}>
-                  <Text style={{ color: '#00ffcc', fontWeight: 'bold', marginBottom: 8 }}>Nuevo Perfil (Oculto por defecto)</Text>
+                  <Text style={{ color: '#2dd4bf', fontWeight: 'bold', marginBottom: 8 }}>Nuevo Perfil (Oculto por defecto)</Text>
                   
                   <TextInput 
                     style={styles.input} 
@@ -1302,65 +1293,65 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0b0f19' },
+  container: { flex: 1, backgroundColor: '#0f172a' },
   
-  welcomeContainer: { flex: 1, backgroundColor: '#0b0f19', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  welcomeCard: { backgroundColor: '#111827', width: '100%', maxWidth: 440, padding: 28, borderRadius: 20, borderWidth: 2, borderColor: '#00ffcc', alignItems: 'center', shadowColor: '#00ffcc', shadowOpacity: 0.25, shadowRadius: 15 },
+  welcomeContainer: { flex: 1, backgroundColor: '#0f172a', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  welcomeCard: { backgroundColor: '#172033', width: '100%', maxWidth: 440, padding: 28, borderRadius: 20, borderWidth: 2, borderColor: '#2dd4bf', alignItems: 'center', shadowColor: '#2dd4bf', shadowOpacity: 0.25, shadowRadius: 15 },
   welcomeEmoji: { fontSize: 44, marginBottom: 10 },
   welcomeTitle: { fontSize: 24, fontWeight: 'bold', color: '#ffffff', marginBottom: 6, textAlign: 'center' },
   welcomeSubtitle: { fontSize: 13, color: '#9ca3af', textAlign: 'center', marginBottom: 24 },
   
-  welcomePublicBtn: { backgroundColor: '#00ffcc', width: '100%', padding: 16, borderRadius: 14, alignItems: 'center', marginBottom: 14 },
-  welcomePublicBtnText: { color: '#0b0f19', fontSize: 15, fontWeight: 'bold' },
-  welcomePublicBtnSub: { color: '#0b0f19', fontSize: 11, fontWeight: '600', opacity: 0.8, marginTop: 2 },
+  welcomePublicBtn: { backgroundColor: '#2dd4bf', width: '100%', padding: 16, borderRadius: 14, alignItems: 'center', marginBottom: 14 },
+  welcomePublicBtnText: { color: '#0f172a', fontSize: 15, fontWeight: 'bold' },
+  welcomePublicBtnSub: { color: '#0f172a', fontSize: 11, fontWeight: '600', opacity: 0.8, marginTop: 2 },
   
-  welcomeAdminBtn: { backgroundColor: '#1f2937', width: '100%', padding: 16, borderRadius: 14, alignItems: 'center', borderWidth: 1.5, borderColor: '#374151' },
+  welcomeAdminBtn: { backgroundColor: '#202d40', width: '100%', padding: 16, borderRadius: 14, alignItems: 'center', borderWidth: 1.5, borderColor: '#344256' },
   welcomeAdminBtnText: { color: '#ffffff', fontSize: 15, fontWeight: 'bold' },
   welcomeAdminBtnSub: { color: '#9ca3af', fontSize: 11, fontWeight: '500', marginTop: 2 },
 
-  adminRoleBtnInside: { backgroundColor: '#1f2937', padding: 14, borderRadius: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1.5, borderColor: '#374151' },
+  adminRoleBtnInside: { backgroundColor: '#202d40', padding: 14, borderRadius: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1.5, borderColor: '#344256' },
   adminRoleTextInside: { color: '#ffffff', fontSize: 14, fontWeight: 'bold' },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  modalContent: { backgroundColor: '#111827', width: '100%', maxWidth: 360, padding: 22, borderRadius: 16, borderWidth: 2, borderColor: '#00ffcc' },
+  modalContent: { backgroundColor: '#172033', width: '100%', maxWidth: 360, padding: 22, borderRadius: 16, borderWidth: 2, borderColor: '#2dd4bf' },
   modalTitle: { fontSize: 16, fontWeight: 'bold', color: '#ffffff', marginBottom: 6 },
   modalSub: { fontSize: 12, color: '#9ca3af', marginBottom: 14 },
 
-  topBarContainer: { flexDirection: 'row', backgroundColor: '#111827', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, height: 56, borderBottomWidth: 1, borderColor: '#1f2937', zIndex: 10 },
+  topBarContainer: { flexDirection: 'row', backgroundColor: '#172033', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, height: 56, borderBottomWidth: 1, borderColor: '#202d40', zIndex: 10 },
   roleSelectorWrapper: { marginRight: 6 },
-  roleButtonActive: { backgroundColor: '#1f2937', paddingHorizontal: 8, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#00ffcc' },
-  roleButtonText: { color: '#00ffcc', fontSize: 11, fontWeight: 'bold' },
+  roleButtonActive: { backgroundColor: '#202d40', paddingHorizontal: 8, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#2dd4bf' },
+  roleButtonText: { color: '#2dd4bf', fontSize: 11, fontWeight: 'bold' },
   
-  homeNavBtn: { backgroundColor: '#1f2937', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#374151', marginRight: 6 },
-  homeNavBtnText: { color: '#00ffcc', fontSize: 12, fontWeight: 'bold' },
+  homeNavBtn: { backgroundColor: '#202d40', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#344256', marginRight: 6 },
+  homeNavBtnText: { color: '#2dd4bf', fontSize: 12, fontWeight: 'bold' },
 
-  refreshBtn: { backgroundColor: '#1f2937', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#374151' },
-  refreshBtnText: { color: '#00ffcc', fontSize: 13, fontWeight: 'bold' },
+  refreshBtn: { backgroundColor: '#202d40', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#344256' },
+  refreshBtnText: { color: '#2dd4bf', fontSize: 13, fontWeight: 'bold' },
 
   mainWrapper: { flex: 1 },
   desktopWrapper: { maxWidth: 1024, alignSelf: 'center', width: '100%' },
   content: { flex: 1, padding: 16 },
 
-  dashboardWelcomeCard: { backgroundColor: '#111827', padding: 20, borderRadius: 16, marginBottom: 16, borderWidth: 1.5, borderColor: '#1f2937', alignItems: 'center' },
+  dashboardWelcomeCard: { backgroundColor: '#172033', padding: 20, borderRadius: 16, marginBottom: 16, borderWidth: 1.5, borderColor: '#202d40', alignItems: 'center' },
   dashboardWelcomeEmoji: { fontSize: 32, marginBottom: 6 },
   dashboardWelcomeTitle: { fontSize: 18, fontWeight: 'bold', color: '#ffffff', textAlign: 'center', marginBottom: 4 },
   dashboardWelcomeSub: { fontSize: 12, color: '#9ca3af', textAlign: 'center' },
   dashboardGrid: { gap: 12 },
   desktopDashboardGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
-  dashboardCard: { backgroundColor: '#111827', padding: 18, borderRadius: 16, marginBottom: 12, borderWidth: 1.5, borderColor: '#1f2937' },
+  dashboardCard: { backgroundColor: '#172033', padding: 18, borderRadius: 16, marginBottom: 12, borderWidth: 1.5, borderColor: '#202d40' },
   dashboardCardIcon: { fontSize: 26, marginBottom: 8 },
   dashboardCardTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 4 },
   dashboardCardSub: { fontSize: 12, color: '#9ca3af', marginBottom: 12, lineHeight: 16 },
-  dashboardCardArrow: { fontSize: 12, fontWeight: 'bold', color: '#00ffcc' },
+  dashboardCardArrow: { fontSize: 12, fontWeight: 'bold', color: '#2dd4bf' },
 
   sedesHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
   labelHeader: { fontSize: 12, fontWeight: 'bold', color: '#9ca3af' },
-  editSedeText: { fontSize: 12, fontWeight: 'bold', color: '#00ffcc' },
+  editSedeText: { fontSize: 12, fontWeight: 'bold', color: '#2dd4bf' },
   sedeChipWrapper: { flexDirection: 'row', alignItems: 'center', marginRight: 8 },
-  sedeChip: { backgroundColor: '#1f2937', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: '#374151' },
-  activeSedeChip: { backgroundColor: '#00ffcc', borderColor: '#00ffcc' },
+  sedeChip: { backgroundColor: '#202d40', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: '#344256' },
+  activeSedeChip: { backgroundColor: '#2dd4bf', borderColor: '#2dd4bf' },
   sedeChipText: { fontSize: 13, color: '#d1d5db' },
-  activeSedeChipText: { color: '#0b0f19', fontWeight: 'bold' },
+  activeSedeChipText: { color: '#0f172a', fontWeight: 'bold' },
   deleteBtn: { backgroundColor: '#ff0055', width: 18, height: 18, borderRadius: 9, justifyContent: 'center', alignItems: 'center', marginLeft: -6, marginTop: -10, zIndex: 2 },
   deleteBtnText: { color: '#ffffff', fontSize: 10, fontWeight: 'bold' },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
@@ -1368,63 +1359,63 @@ const styles = StyleSheet.create({
   centeredSectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#ffffff', textAlign: 'center', marginBottom: 12 },
   liveBadge: { backgroundColor: '#3f0d12', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: '#ff0055' },
   liveBadgeText: { color: '#ff3366', fontSize: 11, fontWeight: 'bold' },
-  offlineBadge: { backgroundColor: '#1f2937', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: '#374151' },
+  offlineBadge: { backgroundColor: '#202d40', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: '#344256' },
   offlineBadgeText: { color: '#9ca3af', fontSize: 11, fontWeight: 'bold' },
-  switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1f2937', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#374151', marginBottom: 12 },
-  switchRowInside: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1f2937', padding: 8, borderRadius: 8, marginVertical: 8 },
+  switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#202d40', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#344256', marginBottom: 12 },
+  switchRowInside: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#202d40', padding: 8, borderRadius: 8, marginVertical: 8 },
   switchLabel: { color: '#ffffff', fontSize: 13, fontWeight: '600' },
-  videoContainer: { height: 200, borderRadius: 16, overflow: 'hidden', marginBottom: 12, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: '#1f2937' },
+  videoContainer: { height: 200, borderRadius: 16, overflow: 'hidden', marginBottom: 12, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: '#202d40' },
   desktopVideoContainer: { height: 380 },
   fullScreenProjectorContainer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, height: '100vh', zIndex: 9999, borderRadius: 0, borderWidth: 0 },
-  projectorToggleBtn: { backgroundColor: '#1f2937', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: '#00ffcc' },
-  projectorToggleText: { color: '#00ffcc', fontSize: 11, fontWeight: 'bold' },
+  projectorToggleBtn: { backgroundColor: '#202d40', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: '#2dd4bf' },
+  projectorToggleText: { color: '#2dd4bf', fontSize: 11, fontWeight: 'bold' },
   exitProjectorBtn: { position: 'absolute', top: 20, right: 20, backgroundColor: 'rgba(255, 0, 85, 0.85)', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, zIndex: 10000 },
   exitProjectorText: { color: '#fff', fontWeight: 'bold', fontSize: 12 },
   emptyVideoBox: { padding: 20, alignItems: 'center', justifyContent: 'center' },
   emptyVideoText: { color: '#ffffff', fontSize: 13, fontWeight: 'bold', textAlign: 'center' },
-  addSedeToggleBtn: { borderStyle: 'dashed', borderWidth: 2, borderColor: '#00ffcc', padding: 12, borderRadius: 12, alignItems: 'center', marginBottom: 12, backgroundColor: '#111827' },
-  addSedeToggleText: { color: '#00ffcc', fontWeight: 'bold', fontSize: 13 },
-  addSedeCard: { backgroundColor: '#111827', padding: 16, borderRadius: 14, marginBottom: 12, borderWidth: 2, borderColor: '#00ffcc' },
-  card: { backgroundColor: '#111827', padding: 16, borderRadius: 14, marginBottom: 10, borderWidth: 1, borderColor: '#1f2937' },
-  answeredCard: { borderColor: '#00ffcc', backgroundColor: '#0b1f1a' },
+  addSedeToggleBtn: { borderStyle: 'dashed', borderWidth: 2, borderColor: '#2dd4bf', padding: 12, borderRadius: 12, alignItems: 'center', marginBottom: 12, backgroundColor: '#172033' },
+  addSedeToggleText: { color: '#2dd4bf', fontWeight: 'bold', fontSize: 13 },
+  addSedeCard: { backgroundColor: '#172033', padding: 16, borderRadius: 14, marginBottom: 12, borderWidth: 2, borderColor: '#2dd4bf' },
+  card: { backgroundColor: '#172033', padding: 16, borderRadius: 14, marginBottom: 10, borderWidth: 1, borderColor: '#202d40' },
+  answeredCard: { borderColor: '#2dd4bf', backgroundColor: '#0b1f1a' },
   cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   cardTitle: { fontSize: 15, fontWeight: 'bold', color: '#ffffff', marginRight: 8 },
   cardSub: { fontSize: 13, color: '#d1d5db', marginTop: 4, lineHeight: 18 },
-  input: { backgroundColor: '#1f2937', padding: 12, borderRadius: 10, borderWidth: 1.5, borderColor: '#374151', marginBottom: 8, color: '#ffffff', fontSize: 14 },
-  actionBtn: { backgroundColor: '#00ffcc', padding: 14, borderRadius: 12, alignItems: 'center', marginTop: 4 },
-  actionBtnText: { color: '#0b0f19', fontWeight: 'bold', fontSize: 14 },
+  input: { backgroundColor: '#202d40', padding: 12, borderRadius: 10, borderWidth: 1.5, borderColor: '#344256', marginBottom: 8, color: '#ffffff', fontSize: 14 },
+  actionBtn: { backgroundColor: '#2dd4bf', padding: 14, borderRadius: 12, alignItems: 'center', marginTop: 4 },
+  actionBtnText: { color: '#0f172a', fontWeight: 'bold', fontSize: 14 },
   metricContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 10 },
-  metricCard: { width: '48%', backgroundColor: '#111827', padding: 14, borderRadius: 14, borderWidth: 1.5, borderColor: '#1f2937', marginBottom: 10 },
+  metricCard: { width: '48%', backgroundColor: '#172033', padding: 14, borderRadius: 14, borderWidth: 1.5, borderColor: '#202d40', marginBottom: 10 },
   metricLabel: { fontSize: 12, color: '#9ca3af', fontWeight: '600' },
   metricValue: { fontSize: 18, fontWeight: 'bold', marginTop: 4 },
   
   monthSelectorRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
-  monthTabBtn: { flex: 1, backgroundColor: '#1f2937', padding: 10, borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: '#374151' },
-  activeMonthTab: { backgroundColor: '#00ffcc', borderColor: '#00ffcc' },
+  monthTabBtn: { flex: 1, backgroundColor: '#202d40', padding: 10, borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: '#344256' },
+  activeMonthTab: { backgroundColor: '#2dd4bf', borderColor: '#2dd4bf' },
   monthTabText: { color: '#d1d5db', fontWeight: 'bold', fontSize: 13 },
-  activeMonthTabText: { color: '#0b0f19' },
+  activeMonthTabText: { color: '#0f172a' },
 
   // Estilos avanzados para el nuevo Calendario en Cuadrícula Mensual
-  calendarContainerCard: { backgroundColor: '#111827', borderRadius: 16, padding: 12, borderWidth: 1.5, borderColor: '#1f2937' },
-  weekDaysHeaderRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 8, paddingBottom: 6, borderBottomWidth: 1, borderColor: '#374151' },
+  calendarContainerCard: { backgroundColor: '#172033', borderRadius: 16, padding: 12, borderWidth: 1.5, borderColor: '#202d40' },
+  weekDaysHeaderRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 8, paddingBottom: 6, borderBottomWidth: 1, borderColor: '#344256' },
   weekDayLabel: { color: '#9ca3af', fontSize: 12, fontWeight: 'bold', width: '14%', textAlign: 'center' },
   calendarWeekRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 6 },
   calendarCellEmpty: { width: '14%', aspectRatio: 1 },
-  calendarCell: { width: '14%', aspectRatio: 1, backgroundColor: '#1f2937', justifyContent: 'center', alignItems: 'center', borderRadius: 8, borderWidth: 1, borderColor: '#374151' },
-  cellWithEvent: { borderColor: '#00ffcc', backgroundColor: '#0b1f1a' },
-  cellSelected: { backgroundColor: '#00ffcc', borderColor: '#00ffcc' },
+  calendarCell: { width: '14%', aspectRatio: 1, backgroundColor: '#202d40', justifyContent: 'center', alignItems: 'center', borderRadius: 8, borderWidth: 1, borderColor: '#344256' },
+  cellWithEvent: { borderColor: '#2dd4bf', backgroundColor: '#0b1f1a' },
+  cellSelected: { backgroundColor: '#2dd4bf', borderColor: '#2dd4bf' },
   cellDayNumber: { color: '#ffffff', fontSize: 13, fontWeight: 'bold' },
-  cellDayNumberSelected: { color: '#0b0f19' },
+  cellDayNumberSelected: { color: '#0f172a' },
   cellEventIndicator: { position: 'absolute', bottom: 2, right: 2, backgroundColor: '#ff0055', width: 14, height: 14, borderRadius: 7, justifyContent: 'center', alignItems: 'center' },
   cellEventIndicatorText: { color: '#ffffff', fontSize: 9, fontWeight: 'bold' },
 
-  activePrayerBadge: { backgroundColor: '#374151', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
+  activePrayerBadge: { backgroundColor: '#344256', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
   activePrayerBadgeText: { color: '#fbbf24', fontSize: 10, fontWeight: 'bold' },
   answeredBadge: { backgroundColor: '#064e3b', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
   answeredBadgeText: { color: '#34d399', fontSize: 10, fontWeight: 'bold' },
-  prayerActionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingTop: 8, borderTopWidth: 1, borderColor: '#1f2937' },
-  supportBtn: { backgroundColor: '#1f2937', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#374151' },
-  supportBtnText: { color: '#00ffcc', fontSize: 12, fontWeight: 'bold' },
+  prayerActionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingTop: 8, borderTopWidth: 1, borderColor: '#202d40' },
+  supportBtn: { backgroundColor: '#202d40', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#344256' },
+  supportBtnText: { color: '#2dd4bf', fontSize: 12, fontWeight: 'bold' },
   statusToggleBtn: { paddingHorizontal: 8, paddingVertical: 6 },
   statusToggleText: { color: '#9ca3af', fontSize: 12, fontWeight: '600' }
 });
